@@ -1,0 +1,1364 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crisol — Rastreador de Vitórias na Arena (LoL)</title>
+<meta name="description" content="Acompanhe com quais campeões você já venceu no modo Arena de League of Legends: agrupe por classe, registre notas, acompanhe sua sequência de vitórias e exporte seu progresso.">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpolygon points='50,4 93,27 93,73 50,96 7,73 7,27' fill='%23111823' stroke='%23C8AA6E' stroke-width='6'/%3E%3Cpath d='M30 52 L45 67 L72 34' fill='none' stroke='%230AC8B9' stroke-width='9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpolygon points='50,4 93,27 93,73 50,96 7,73 7,27' fill='%23111823' stroke='%23C8AA6E' stroke-width='6'/%3E%3Cpath d='M30 52 L45 67 L72 34' fill='none' stroke='%230AC8B9' stroke-width='9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --void:#080B10;
+    --panel:#111823;
+    --panel-2:#161f2c;
+    --line: rgba(200,170,110,0.14);
+    --gold:#C8AA6E;
+    --gold-bright:#F0E6D2;
+    --teal:#0AC8B9;
+    --teal-dim: rgba(10,200,185,0.16);
+    --ember:#C8494A;
+    --ember-dim: rgba(200,73,74,0.14);
+    --muted:#7C8798;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(1100px 600px at 15% -10%, rgba(10,200,185,0.07), transparent 60%),
+      radial-gradient(900px 500px at 100% 0%, rgba(200,170,110,0.08), transparent 55%),
+      var(--void);
+    color:var(--gold-bright);
+    font-family:'Inter', sans-serif;
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{ background: var(--teal-dim); color:var(--gold-bright); }
+
+  /* ---------- Header ---------- */
+  header{
+    padding: 44px 24px 28px;
+    max-width: 1180px;
+    margin: 0 auto;
+    display:flex;
+    flex-wrap:wrap;
+    gap:36px;
+    align-items:center;
+    justify-content:space-between;
+    border-bottom:1px solid var(--line);
+  }
+  .brand{ display:flex; flex-direction:column; gap:6px; min-width:260px; }
+  .eyebrow{
+    font-family:'JetBrains Mono', monospace;
+    font-size:11px;
+    letter-spacing:.22em;
+    text-transform:uppercase;
+    color:var(--teal);
+  }
+  h1{
+    font-family:'Cinzel', serif;
+    font-weight:700;
+    font-size:clamp(28px,4vw,40px);
+    margin:0;
+    letter-spacing:.02em;
+    line-height:1.05;
+  }
+  h1 span{ color:var(--gold); }
+  .subtitle{ color:var(--muted); font-size:14.5px; max-width:480px; line-height:1.5; }
+  .storage-badge{
+    display:inline-flex; align-items:center; gap:6px; width:fit-content;
+    font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--muted);
+    border:1px solid var(--line); border-radius:20px; padding:5px 12px;
+    cursor:default;
+  }
+
+  /* Crystal progress */
+  .crystal-wrap{ display:flex; align-items:center; gap:22px; }
+  .crystal{ position:relative; width:118px; height:118px; flex-shrink:0; }
+  .crystal svg{ transform:rotate(-90deg); }
+  .crystal-track{ fill:none; stroke: rgba(255,255,255,0.06); stroke-width:8; }
+  .crystal-fill{ fill:none; stroke: var(--teal); stroke-width:8; stroke-linecap:round;
+    filter: drop-shadow(0 0 8px rgba(10,200,185,0.65));
+    transition: stroke-dasharray .6s cubic-bezier(.4,0,.2,1);
+  }
+  .crystal-center{
+    position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    font-family:'JetBrains Mono', monospace;
+  }
+  .crystal-center .num{ font-size:22px; font-weight:600; color:var(--gold-bright); }
+  .crystal-center .den{ font-size:10px; color:var(--muted); letter-spacing:.05em; }
+  .crystal-stats{ display:flex; flex-direction:column; gap:4px; }
+  .crystal-stats .pct{ font-family:'Cinzel',serif; font-size:26px; font-weight:600; color:var(--gold); }
+  .crystal-stats .label{ font-size:12.5px; color:var(--muted); }
+
+  /* ---------- Legend ---------- */
+  .legend{
+    max-width:1180px; margin:18px auto 0; padding:0 24px;
+    display:flex; gap:18px; flex-wrap:wrap; font-size:12px; color:var(--muted);
+    font-family:'JetBrains Mono',monospace;
+  }
+  .legend .item{ display:flex; align-items:center; gap:6px; }
+  .legend .dot{ width:10px; height:10px; border-radius:50%; display:inline-block; }
+  .legend .dot.none{ background:transparent; border:1.5px solid var(--line); }
+  .legend .dot.played{ background:var(--gold); }
+  .legend .dot.won{ background:var(--teal); box-shadow:0 0 6px rgba(10,200,185,.7); }
+
+  /* ---------- Stats strip (streak + history) ---------- */
+  .stats-strip{
+    max-width:1180px; margin:16px auto 0; padding:0 24px;
+    display:flex; gap:14px; flex-wrap:wrap; align-items:center;
+  }
+  .streak-badge{
+    display:flex; align-items:center; gap:7px;
+    background:var(--panel); border:1px solid var(--line); border-radius:20px;
+    padding:8px 14px; font-size:13px; color:var(--gold-bright); white-space:nowrap;
+  }
+  .streak-badge b{ color:var(--gold); font-family:'JetBrains Mono',monospace; }
+  .history-chips{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .history-label{ font-size:11px; color:var(--muted); font-family:'JetBrains Mono',monospace; letter-spacing:.05em; text-transform:uppercase; margin-right:4px; }
+  .history-chip{
+    display:flex; align-items:center; gap:6px;
+    background:var(--panel-2); border:1px solid var(--line); border-radius:16px;
+    padding:5px 10px 5px 5px; font-size:12px; color:var(--gold-bright);
+  }
+  .history-chip img{ width:20px; height:20px; border-radius:50%; object-fit:cover; }
+  .history-chip .hdate{ color:var(--muted); font-family:'JetBrains Mono',monospace; font-size:10.5px; }
+  .history-empty{ font-size:12px; color:var(--muted); font-style:italic; }
+
+  /* ---------- Controls ---------- */
+  .controls{
+    max-width:1180px; margin: 26px auto 0; padding: 0 24px;
+    display:flex; flex-wrap:wrap; gap:14px; align-items:center; justify-content:space-between;
+  }
+  .controls-secondary{
+    max-width:1180px; margin: 12px auto 0; padding: 0 24px;
+    display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between;
+  }
+  .search-box{ position:relative; flex:1; min-width:220px; max-width:380px; }
+  .search-box input{
+    width:100%;
+    background:var(--panel);
+    border:1px solid var(--line);
+    color:var(--gold-bright);
+    padding:11px 14px 11px 38px;
+    border-radius:8px;
+    font-family:'Inter',sans-serif;
+    font-size:14px;
+    outline:none;
+    transition:border-color .2s;
+  }
+  .search-box input:focus{ border-color: var(--teal); }
+  .search-box svg{ position:absolute; left:12px; top:50%; transform:translateY(-50%); opacity:.5; }
+
+  .filters{ display:flex; gap:8px; flex-wrap:wrap; }
+  .chip{
+    font-family:'JetBrains Mono', monospace;
+    font-size:12px;
+    letter-spacing:.03em;
+    padding:9px 16px;
+    border-radius:20px;
+    border:1px solid var(--line);
+    background:var(--panel);
+    color:var(--muted);
+    cursor:pointer;
+    transition: all .15s;
+    user-select:none;
+  }
+  .chip:hover{ color:var(--gold-bright); border-color: var(--gold); }
+  .chip.active{ background: var(--teal-dim); border-color:var(--teal); color:var(--teal); }
+  .chip.active.missing{ background: var(--ember-dim); border-color:var(--ember); color:#e58687; }
+  .chip.active.played{ background: rgba(200,170,110,0.16); border-color:var(--gold); color:var(--gold); }
+
+  .toolbar-right{ display:flex; gap:10px; flex-wrap:wrap; }
+  .btn{
+    font-family:'Inter',sans-serif;
+    font-size:13px;
+    font-weight:600;
+    padding:10px 16px;
+    border-radius:8px;
+    border:1px solid var(--line);
+    background:var(--panel);
+    color:var(--gold-bright);
+    cursor:pointer;
+    transition:.15s;
+    white-space:nowrap;
+  }
+  .btn:hover{ border-color:var(--gold); color:var(--gold); }
+  .btn:disabled{ opacity:.4; cursor:not-allowed; }
+  .btn:disabled:hover{ border-color:var(--line); color:var(--gold-bright); }
+  .btn.primary{ background: linear-gradient(135deg, rgba(10,200,185,0.18), rgba(10,200,185,0.05)); border-color:var(--teal); color:var(--teal); }
+  .btn.primary:hover{ background: rgba(10,200,185,0.24); }
+  .btn.danger:hover{ border-color:var(--ember); color:#e58687; }
+  .btn.toggle.active{ background: var(--teal-dim); border-color:var(--teal); color:var(--teal); }
+
+  select.sort-select{
+    font-family:'Inter',sans-serif; font-size:13px; font-weight:600;
+    padding:10px 14px; border-radius:8px; border:1px solid var(--line);
+    background:var(--panel); color:var(--gold-bright); cursor:pointer;
+  }
+  select.sort-select:focus{ outline:none; border-color:var(--teal); }
+
+  /* ---------- Suggestion banner ---------- */
+  #suggestion{ max-width:1180px; margin:18px auto 0; padding:0 24px; display:none; }
+  #suggestion.show{ display:block; }
+  .suggestion-card{
+    display:flex; align-items:center; gap:16px;
+    background: linear-gradient(90deg, rgba(200,170,110,0.10), rgba(200,170,110,0.02));
+    border:1px solid var(--gold); border-radius:10px; padding:14px 18px;
+  }
+  .suggestion-card img{ width:52px; height:52px; border-radius:50%; border:2px solid var(--gold); }
+  .suggestion-card .txt{ flex:1; }
+  .suggestion-card .txt .lead{ font-size:11px; color:var(--muted); font-family:'JetBrains Mono',monospace; letter-spacing:.08em; text-transform:uppercase; }
+  .suggestion-card .txt .name{ font-family:'Cinzel',serif; font-size:19px; color:var(--gold-bright); }
+
+  /* ---------- Add champion ---------- */
+  .add-row{ display:none; gap:10px; margin-top:14px; }
+  .add-row.show{ display:flex; flex-wrap:wrap; }
+  .add-row input{
+    background:var(--panel); border:1px solid var(--line); color:var(--gold-bright);
+    padding:10px 12px; border-radius:8px; font-size:13.5px; flex:1; min-width:180px; outline:none;
+  }
+  .add-row input:focus{ border-color:var(--teal); }
+
+  /* ---------- Groups & grid ---------- */
+  main{ max-width:1180px; margin: 30px auto 80px; padding: 0 24px; }
+  .group-block{ margin-bottom:34px; }
+  .group-header{
+    display:flex; align-items:baseline; gap:10px;
+    font-family:'Cinzel',serif; font-size:17px; color:var(--gold);
+    border-bottom:1px solid var(--line); padding-bottom:8px; margin-bottom:18px;
+  }
+  .group-header .gcount{ font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--muted); font-weight:400; }
+
+  .grid{
+    display:grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap:26px 16px;
+  }
+  .champ{
+    position:relative;
+    display:flex; flex-direction:column; align-items:center; gap:10px;
+    cursor:pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .portrait{
+    position:relative;
+    width:84px; height:84px;
+  }
+  .hex{
+    position:absolute; inset:0;
+    clip-path: polygon(50% 0%, 95% 25%, 95% 75%, 50% 100%, 5% 75%, 5% 25%);
+    background:
+      linear-gradient(160deg, rgba(255,255,255,0.06), rgba(0,0,0,0) 40%),
+      var(--panel-2);
+    border: 2px solid var(--line);
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.35);
+    transition: border-color .18s, transform .18s, box-shadow .18s;
+    overflow:hidden;
+  }
+  .hex img{
+    width:100%; height:100%; object-fit:cover; display:block;
+    filter: grayscale(1) brightness(0.22) contrast(1.05);
+    transition: filter .35s ease;
+  }
+  .hex .fallback{
+    width:100%; height:100%; display:flex; align-items:center; justify-content:center;
+    font-family:'Cinzel',serif; font-size:26px; color:var(--muted);
+    background: linear-gradient(155deg, var(--panel-2), #0c1119);
+  }
+  .dex-num{
+    position:absolute; top:-9px; left:50%; transform:translateX(-50%);
+    z-index:4;
+    font-family:'JetBrains Mono',monospace; font-size:9.5px; font-weight:600; letter-spacing:.04em;
+    color: var(--void);
+    background: linear-gradient(135deg, var(--gold), #e2cd9a);
+    padding:2px 7px; border-radius:20px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.45);
+    white-space:nowrap;
+  }
+  .champ.state-won .dex-num{ background: linear-gradient(135deg, var(--teal), #6fe6da); }
+
+  .champ:hover .portrait{ transform: translateY(-3px); }
+  .champ:hover .hex{ border-color: var(--gold); }
+  .champ.state-none:hover .hex img{ filter: grayscale(1) brightness(0.4) contrast(1.05); }
+  .champ.state-played:hover .hex img{ filter: grayscale(0.7) brightness(1) contrast(1.05); }
+
+  .champ.state-played .hex{ border-color: var(--gold); border-style:dashed; }
+  .champ.state-played .hex img{ filter: grayscale(1) brightness(0.95) contrast(1.05); }
+  .champ.state-played .cname{ color: var(--gold); }
+  .status-dot{
+    display:none; position:absolute; bottom:-2px; right:-2px; z-index:4;
+    width:14px; height:14px; border-radius:50%;
+    background: var(--gold); border:2px solid var(--void);
+  }
+  .champ.state-played .status-dot{ display:block; }
+
+  .champ.state-won .hex{ border-color: var(--teal); box-shadow: inset 0 0 0 1px rgba(0,0,0,0.35), 0 0 14px rgba(10,200,185,.45); }
+  .champ.state-won .hex img{ filter: grayscale(0) brightness(1) saturate(1.08) contrast(1); }
+  .champ.state-won .cname{ color: var(--teal); }
+
+  .champ .cname{
+    font-size:12.5px; text-align:center; color:var(--gold-bright);
+    line-height:1.2; max-width:100px;
+  }
+
+  .champ-meta{ display:none; align-items:center; gap:6px; font-size:11px; color:var(--muted); font-family:'JetBrains Mono',monospace; }
+  .champ.state-won .champ-meta{ display:flex; }
+  .champ-meta .meta-date{ display:none; }
+  .edit-note{
+    background:none; border:none; color:var(--muted); cursor:pointer;
+    font-size:12px; padding:2px 5px; border-radius:4px; line-height:1;
+  }
+  .edit-note:hover{ color:var(--gold); background:rgba(200,170,110,0.1); }
+
+  /* ---------- Tooltip (info da partida ao passar o mouse) ---------- */
+  .tooltip-box{
+    position:absolute; bottom:calc(100% + 14px); left:50%;
+    transform:translateX(-50%) translateY(6px);
+    min-width:170px; max-width:230px;
+    background: var(--panel);
+    border:1px solid var(--gold);
+    border-radius:10px;
+    padding:10px 13px;
+    box-shadow: 0 14px 34px rgba(0,0,0,.55);
+    opacity:0; pointer-events:none;
+    transition: opacity .15s ease, transform .15s ease;
+    z-index:30;
+    text-align:left;
+  }
+  .tooltip-box::after{
+    content:''; position:absolute; top:100%; left:50%; transform:translateX(-50%);
+    border:6px solid transparent; border-top-color:var(--gold);
+  }
+  .champ.state-won .tooltip-box::after{ border-top-color:var(--teal); }
+  .champ.state-won .tooltip-box{ border-color:var(--teal); }
+  .champ:hover .tooltip-box{ opacity:1; transform:translateX(-50%) translateY(0); pointer-events:none; }
+  .tooltip-box .tt-title{
+    font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.06em; text-transform:uppercase;
+    color: var(--teal); margin-bottom:4px;
+  }
+  .champ.state-none .tooltip-box .tt-title,
+  .champ.state-played .tooltip-box .tt-title{ color: var(--gold); }
+  .tooltip-box .tt-row{ font-size:13px; color:var(--gold-bright); line-height:1.4; }
+  .tooltip-box .tt-note{ font-size:12px; color:var(--muted); margin-top:4px; line-height:1.4; font-style:italic; }
+
+  /* Brilho ao marcar como concluído */
+  .champ.celebrate .hex{ animation: hexPulse .65s ease-out; }
+  .champ.celebrate .cname{ animation: labelPop .65s ease-out; }
+  .champ.celebrate .hex::before{
+    content:'';
+    position:absolute; inset:-40%;
+    background: linear-gradient(115deg, transparent 35%, rgba(255,255,255,0.85) 50%, transparent 65%);
+    transform: translateX(-140%);
+    animation: shineSweep .65s ease-out;
+    pointer-events:none; z-index:2;
+  }
+  @keyframes hexPulse{
+    0%   { box-shadow: 0 0 0 rgba(10,200,185,0); transform: scale(1); }
+    35%  { box-shadow: 0 0 28px rgba(10,200,185,0.95), 0 0 46px rgba(10,200,185,0.4); transform: scale(1.12); }
+    100% { box-shadow: 0 0 14px rgba(10,200,185,.45); transform: scale(1); }
+  }
+  @keyframes shineSweep{
+    0%   { transform: translateX(-140%) rotate(8deg); opacity:0; }
+    15%  { opacity:1; }
+    100% { transform: translateX(140%) rotate(8deg); opacity:0; }
+  }
+  @keyframes labelPop{
+    0%   { color: var(--gold-bright); transform: scale(1); }
+    40%  { color: var(--teal); transform: scale(1.12); }
+    100% { color: var(--teal); transform: scale(1); }
+  }
+
+  /* ---------- List mode ---------- */
+  .grid.list-mode{ display:flex; flex-direction:column; gap:8px; }
+  .grid.list-mode .champ{
+    flex-direction:row; align-items:center; gap:14px; width:100%;
+    padding:8px 12px; border-radius:8px; background:var(--panel); border:1px solid var(--line);
+  }
+  .grid.list-mode .champ:hover{ border-color:var(--gold); }
+  .grid.list-mode .portrait{ width:44px; height:44px; flex-shrink:0; }
+  .grid.list-mode .dex-num{ display:none; }
+  .grid.list-mode .tooltip-box{ left:0; transform:translateX(0) translateY(6px); }
+  .grid.list-mode .tooltip-box::after{ left:20px; transform:translateX(-50%); }
+  .grid.list-mode .champ:hover .tooltip-box{ transform:translateX(0) translateY(0); }
+  .grid.list-mode .cname{ text-align:left; max-width:none; flex:1; font-size:14px; }
+  .grid.list-mode .champ-meta{ margin-left:auto; }
+  .grid.list-mode .champ-meta .meta-date{ display:inline; }
+
+  .empty-state{ text-align:center; padding: 70px 20px; color:var(--muted); font-family:'JetBrains Mono',monospace; font-size:13px; }
+
+  /* ---------- Modal: registrar partida vencida ---------- */
+  .modal-overlay{
+    position:fixed; inset:0; z-index:200;
+    background: rgba(4,7,11,0.72);
+    backdrop-filter: blur(3px);
+    display:none; align-items:center; justify-content:center;
+    padding:20px;
+  }
+  .modal-overlay.show{ display:flex; }
+  .modal-box{
+    width:min(380px, 100%);
+    background: var(--panel);
+    border:1px solid var(--gold);
+    border-radius:14px;
+    padding:22px 22px 18px;
+    box-shadow: 0 24px 70px rgba(0,0,0,.6);
+  }
+  .modal-head{ display:flex; align-items:center; gap:13px; margin-bottom:16px; }
+  .modal-head img{ width:52px; height:52px; border-radius:50%; border:2px solid var(--teal); object-fit:cover; }
+  .modal-eyebrow{ font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--teal); letter-spacing:.08em; text-transform:uppercase; }
+  .modal-name{ font-family:'Cinzel',serif; font-size:19px; color:var(--gold-bright); line-height:1.2; }
+  .modal-label{ display:block; font-size:12px; color:var(--muted); margin:12px 0 6px; }
+  .modal-box input[type="date"], .modal-box textarea{
+    width:100%; background:var(--void); border:1px solid var(--line); color:var(--gold-bright);
+    border-radius:8px; padding:9px 11px; font-family:'Inter',sans-serif; font-size:13.5px; outline:none; resize:vertical;
+  }
+  .modal-box input[type="date"]:focus, .modal-box textarea:focus{ border-color:var(--teal); }
+  .modal-actions{ display:flex; justify-content:flex-end; gap:10px; margin-top:20px; }
+
+  .gh-icon{
+    width:52px; height:52px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    background: linear-gradient(135deg, rgba(10,200,185,0.18), rgba(200,170,110,0.1));
+    border:2px solid var(--teal);
+    font-size:22px;
+  }
+  .gh-explain{ font-size:12.5px; color:var(--muted); line-height:1.55; margin:0 0 4px; }
+  .gh-token-help{ font-size:11.5px; color:var(--muted); margin-top:6px; line-height:1.5; }
+  .gh-token-help a{ color:var(--teal); }
+  .gh-status{ font-family:'JetBrains Mono',monospace; font-size:12px; min-height:18px; margin-top:12px; color:var(--muted); }
+  .gh-status.ok{ color:var(--teal); }
+  .gh-status.err{ color:var(--ember); }
+  .gh-actions{ flex-wrap:wrap; justify-content:flex-start; }
+  .btn.danger{ border-color: var(--ember); color:#e58687; }
+
+  /* ---------- Toast ---------- */
+  #toast{
+    position:fixed; top:20px; left:50%; transform:translateX(-50%) translateY(-20px);
+    background: var(--panel); border:1px solid var(--gold); color:var(--gold-bright);
+    padding:12px 22px; border-radius:10px; font-size:13.5px; font-family:'Inter',sans-serif;
+    box-shadow: 0 8px 30px rgba(0,0,0,.5);
+    opacity:0; pointer-events:none; transition: opacity .3s, transform .3s;
+    z-index:9999;
+  }
+  #toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+  /* ---------- Confetti ---------- */
+  .confetti-layer{ position:fixed; inset:0; pointer-events:none; z-index:9998; overflow:hidden; }
+  .confetti-piece{ position:absolute; top:-12px; width:8px; height:14px; opacity:.95; animation-name:confettiFall; animation-timing-function: ease-in; animation-fill-mode:forwards; }
+  @keyframes confettiFall{ to { transform: translateY(110vh) rotate(540deg); opacity:0; } }
+
+  footer{ max-width:1180px; margin:0 auto 50px; padding:0 24px; color:var(--muted); font-size:12px; text-align:center; line-height:1.6; }
+
+  @media (max-width:640px){
+    .crystal-wrap{ width:100%; justify-content:space-between; }
+    .controls, .controls-secondary{ flex-direction:column; align-items:stretch; }
+    .toolbar-right{ justify-content:flex-end; }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ transition:none !important; }
+    .champ.celebrate .hex, .champ.celebrate .cname, .champ.celebrate .hex::before{ animation:none !important; }
+    .confetti-piece{ animation:none !important; display:none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="eyebrow">Modo Arena · Registro Pessoal</div>
+    <h1>Cri<span>sol</span></h1>
+    <div class="subtitle">Um codex de Arena, estilo Pokédex: cada campeão começa em silhueta e só ganha cor de verdade depois da sua primeira vitória. Clique para alternar o status.</div>
+    <div class="storage-badge" id="storageBadge">Verificando armazenamento…</div>
+  </div>
+
+  <div class="crystal-wrap">
+    <div class="crystal">
+      <svg width="118" height="118" viewBox="0 0 118 118">
+        <circle class="crystal-track" cx="59" cy="59" r="50"></circle>
+        <circle id="crystalFill" class="crystal-fill" cx="59" cy="59" r="50" stroke-dasharray="0 314"></circle>
+      </svg>
+      <div class="crystal-center">
+        <div class="num" id="wonCount">0</div>
+        <div class="den" id="totalCount">de 0</div>
+      </div>
+    </div>
+    <div class="crystal-stats">
+      <div class="pct" id="pctLabel">0%</div>
+      <div class="label">do roster vencido</div>
+    </div>
+  </div>
+</header>
+
+<div class="legend">
+  <div class="item"><span class="dot none"></span> Silhueta escura — não jogado</div>
+  <div class="item"><span class="dot played"></span> Tons de cinza — jogado, sem vitória</div>
+  <div class="item"><span class="dot won"></span> Colorido — vencido</div>
+</div>
+
+<div class="stats-strip">
+  <div class="streak-badge">🔥 <b id="streakCount">0</b>&nbsp;dia(s) em sequência</div>
+  <div class="history-chips" id="historyChips">
+    <span class="history-label">Últimas conquistas</span>
+    <span class="history-empty">Nenhuma vitória registrada ainda.</span>
+  </div>
+</div>
+
+<div class="modal-overlay" id="matchModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <img id="mmImg" src="" alt="">
+      <div>
+        <div class="modal-eyebrow">Registrar vitória na Arena</div>
+        <div class="modal-name" id="mmName">—</div>
+      </div>
+    </div>
+    <label class="modal-label" for="mmDate">Data da vitória</label>
+    <input type="date" id="mmDate">
+    <label class="modal-label" for="mmNote">Anotação (build, dupla, adversários...)</label>
+    <textarea id="mmNote" rows="3" placeholder="Ex: venci de Yasuo com build tank, dupla com o Braum"></textarea>
+    <div class="modal-actions">
+      <div class="btn" id="mmCancel">Fechar</div>
+      <div class="btn primary" id="mmSave">Salvar</div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="githubModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div class="gh-icon">☁</div>
+      <div>
+        <div class="modal-eyebrow">Sua nuvem pessoal</div>
+        <div class="modal-name">Sincronizar com GitHub</div>
+      </div>
+    </div>
+    <p class="gh-explain">
+      Seu progresso é salvo em um <b>Gist privado</b> na sua própria conta do GitHub — só você tem acesso.
+      O token fica guardado apenas neste navegador e é usado só para falar direto com a API do GitHub.
+    </p>
+    <label class="modal-label" for="ghToken">Token de acesso pessoal (escopo <code>gist</code>)</label>
+    <input type="password" id="ghToken" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off">
+    <div class="gh-token-help">
+      Não tem um? <a href="https://github.com/settings/tokens/new?description=Crisol%20Arena%20Tracker&scopes=gist" target="_blank" rel="noopener">Crie um aqui</a> marcando apenas a permissão <b>gist</b> e clique em "Generate token".
+    </div>
+    <label class="modal-label" for="ghGistId">ID do Gist (deixe em branco na primeira vez)</label>
+    <input type="text" id="ghGistId" placeholder="preenchido automaticamente após salvar">
+    <div class="gh-status" id="ghStatus"></div>
+    <div class="modal-actions gh-actions">
+      <div class="btn danger" id="ghDisconnect">Desconectar</div>
+      <div class="btn" id="ghLoad">⬇ Carregar do GitHub</div>
+      <div class="btn primary" id="ghSave">☁ Salvar no GitHub</div>
+    </div>
+    <div class="modal-actions" style="margin-top:8px;">
+      <div class="btn" id="ghClose">Fechar</div>
+    </div>
+  </div>
+</div>
+
+<div class="controls">
+  <div class="search-box">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input type="text" id="searchInput" placeholder="Buscar campeão… (atalho: /)">
+  </div>
+  <div class="filters">
+    <div class="chip active" data-filter="all">Todos</div>
+    <div class="chip missing" data-filter="missing">Faltam</div>
+    <div class="chip played" data-filter="played">Jogados</div>
+    <div class="chip" data-filter="won">Vencidos</div>
+  </div>
+  <div class="toolbar-right">
+    <div class="btn primary" id="suggestBtn">🎲 Sugerir um que falta</div>
+    <div class="btn" id="addToggleBtn">+ Campeão novo</div>
+  </div>
+</div>
+
+<div class="controls-secondary">
+  <div class="toolbar-right">
+    <div class="btn toggle" id="groupToggleBtn">🗂 Agrupar por classe</div>
+    <div class="btn toggle" id="viewToggleBtn">☰ Ver em lista</div>
+    <select class="sort-select" id="sortSelect">
+      <option value="name">Ordenar: Nome (A-Z)</option>
+      <option value="status">Ordenar: Status</option>
+    </select>
+  </div>
+  <div class="toolbar-right">
+    <button type="button" class="btn" id="undoBtn" disabled>↺ Desfazer</button>
+    <button type="button" class="btn" id="githubBtn">☁ GitHub</button>
+    <button type="button" class="btn" id="exportBtn">⬇ Exportar</button>
+    <button type="button" class="btn" id="importBtn">⬆ Importar</button>
+    <input type="file" id="importFile" accept="application/json" style="display:none;">
+    <button type="button" class="btn danger" id="clearAllBtn">🗑 Limpar tudo</button>
+  </div>
+</div>
+
+<div style="max-width:1180px;margin:0 auto;padding:0 24px;">
+  <div class="add-row" id="addRow">
+    <input type="text" id="addNameInput" placeholder="Nome do campeão (ex: nome de um lançamento recente)">
+    <div class="btn primary" id="addConfirmBtn">Adicionar</div>
+  </div>
+</div>
+
+<div id="suggestion">
+  <div class="suggestion-card">
+    <img id="suggestImg" src="" alt="">
+    <div class="txt">
+      <div class="lead">Tente vencer com</div>
+      <div class="name" id="suggestName">—</div>
+    </div>
+    <div class="btn" id="suggestDismiss">Fechar</div>
+  </div>
+</div>
+
+<main>
+  <div id="resultsContainer"></div>
+  <div class="empty-state" id="emptyState" style="display:none;">Nenhum campeão encontrado.</div>
+</main>
+
+<div id="toast"></div>
+
+<footer>
+  Progresso salvo automaticamente no seu navegador. Use "Exportar" para fazer backup ou levar o progresso para outro dispositivo. Nada aqui é enviado à Riot Games.
+</footer>
+
+<script>
+(function(){
+  // ---- Champion roster: [id (Data Dragon key), name, class] ----
+  const ROSTER = [
+    ["Aatrox","Aatrox","FIGHTER"],["Ahri","Ahri","MAGE"],["Akali","Akali","ASSASSIN"],["Akshan","Akshan","ASSASSIN"],
+    ["Alistar","Alistar","SUPPORT"],["Ambessa","Ambessa","FIGHTER"],["Amumu","Amumu","TANK"],["Anivia","Anivia","MAGE"],
+    ["Annie","Annie","MAGE"],["Aphelios","Aphelios","MARKSMAN"],["Ashe","Ashe","MARKSMAN"],["AurelionSol","Aurelion Sol","MAGE"],
+    ["Aurora","Aurora","MAGE"],["Azir","Azir","MAGE"],["Bard","Bard","SUPPORT"],["Belveth","Bel'Veth","FIGHTER"],
+    ["Blitzcrank","Blitzcrank","SUPPORT"],["Brand","Brand","MAGE"],["Braum","Braum","SUPPORT"],["Briar","Briar","FIGHTER"],
+    ["Caitlyn","Caitlyn","MARKSMAN"],["Camille","Camille","FIGHTER"],["Cassiopeia","Cassiopeia","MAGE"],["Chogath","Cho'Gath","TANK"],
+    ["Corki","Corki","MARKSMAN"],["Darius","Darius","FIGHTER"],["Diana","Diana","FIGHTER"],["DrMundo","Dr. Mundo","FIGHTER"],
+    ["Draven","Draven","MARKSMAN"],["Ekko","Ekko","ASSASSIN"],["Elise","Elise","MAGE"],["Evelynn","Evelynn","ASSASSIN"],
+    ["Ezreal","Ezreal","MARKSMAN"],["Fiddlesticks","Fiddlesticks","MAGE"],["Fiora","Fiora","FIGHTER"],["Fizz","Fizz","ASSASSIN"],
+    ["Galio","Galio","TANK"],["Gangplank","Gangplank","FIGHTER"],["Garen","Garen","FIGHTER"],["Gnar","Gnar","FIGHTER"],
+    ["Gragas","Gragas","FIGHTER"],["Graves","Graves","MARKSMAN"],["Gwen","Gwen","FIGHTER"],["Hecarim","Hecarim","FIGHTER"],
+    ["Heimerdinger","Heimerdinger","MAGE"],["Hwei","Hwei","MAGE"],["Illaoi","Illaoi","FIGHTER"],["Irelia","Irelia","FIGHTER"],
+    ["Ivern","Ivern","SUPPORT"],["Janna","Janna","SUPPORT"],["JarvanIV","Jarvan IV","FIGHTER"],["Jax","Jax","FIGHTER"],
+    ["Jayce","Jayce","FIGHTER"],["Jhin","Jhin","MARKSMAN"],["Jinx","Jinx","MARKSMAN"],["KSante","K'Sante","TANK"],
+    ["Kaisa","Kai'Sa","MARKSMAN"],["Kalista","Kalista","MARKSMAN"],["Karma","Karma","MAGE"],["Karthus","Karthus","MAGE"],
+    ["Kassadin","Kassadin","ASSASSIN"],["Katarina","Katarina","ASSASSIN"],["Kayle","Kayle","FIGHTER"],["Kayn","Kayn","FIGHTER"],
+    ["Kennen","Kennen","MAGE"],["Khazix","Kha'Zix","ASSASSIN"],["Kindred","Kindred","MARKSMAN"],["Kled","Kled","FIGHTER"],
+    ["KogMaw","Kog'Maw","MARKSMAN"],["Leblanc","LeBlanc","ASSASSIN"],["LeeSin","Lee Sin","FIGHTER"],["Leona","Leona","SUPPORT"],
+    ["Lillia","Lillia","MAGE"],["Lissandra","Lissandra","MAGE"],["Locke","Locke","MAGE"],["Lucian","Lucian","MARKSMAN"],
+    ["Lulu","Lulu","SUPPORT"],["Lux","Lux","MAGE"],["Malphite","Malphite","TANK"],["Malzahar","Malzahar","MAGE"],
+    ["Maokai","Maokai","TANK"],["MasterYi","Master Yi","FIGHTER"],["Mel","Mel","MAGE"],["Milio","Milio","SUPPORT"],
+    ["MissFortune","Miss Fortune","MARKSMAN"],["Mordekaiser","Mordekaiser","FIGHTER"],["Morgana","Morgana","MAGE"],
+    ["Naafiri","Naafiri","ASSASSIN"],["Nami","Nami","SUPPORT"],["Nasus","Nasus","FIGHTER"],["Nautilus","Nautilus","TANK"],
+    ["Neeko","Neeko","MAGE"],["Nidalee","Nidalee","ASSASSIN"],["Nilah","Nilah","FIGHTER"],["Nocturne","Nocturne","ASSASSIN"],
+    ["Nunu","Nunu & Willump","TANK"],["Olaf","Olaf","FIGHTER"],["Orianna","Orianna","MAGE"],["Ornn","Ornn","TANK"],
+    ["Pantheon","Pantheon","FIGHTER"],["Poppy","Poppy","TANK"],["Pyke","Pyke","SUPPORT"],["Qiyana","Qiyana","ASSASSIN"],
+    ["Quinn","Quinn","MARKSMAN"],["Rakan","Rakan","SUPPORT"],["Rammus","Rammus","TANK"],["RekSai","Rek'Sai","FIGHTER"],
+    ["Rell","Rell","SUPPORT"],["Renata","Renata Glasc","SUPPORT"],["Renekton","Renekton","FIGHTER"],["Rengar","Rengar","ASSASSIN"],
+    ["Riven","Riven","FIGHTER"],["Rumble","Rumble","FIGHTER"],["Ryze","Ryze","MAGE"],["Samira","Samira","MARKSMAN"],
+    ["Sejuani","Sejuani","TANK"],["Senna","Senna","SUPPORT"],["Seraphine","Seraphine","MAGE"],["Sett","Sett","FIGHTER"],
+    ["Shaco","Shaco","ASSASSIN"],["Shen","Shen","TANK"],["Shyvana","Shyvana","FIGHTER"],["Singed","Singed","FIGHTER"],
+    ["Sion","Sion","TANK"],["Sivir","Sivir","MARKSMAN"],["Skarner","Skarner","FIGHTER"],["Smolder","Smolder","MARKSMAN"],
+    ["Sona","Sona","SUPPORT"],["Soraka","Soraka","SUPPORT"],["Swain","Swain","MAGE"],["Sylas","Sylas","FIGHTER"],
+    ["Syndra","Syndra","MAGE"],["TahmKench","Tahm Kench","SUPPORT"],["Taliyah","Taliyah","MAGE"],["Talon","Talon","ASSASSIN"],
+    ["Taric","Taric","SUPPORT"],["Teemo","Teemo","MARKSMAN"],["Thresh","Thresh","SUPPORT"],["Tristana","Tristana","MARKSMAN"],
+    ["Trundle","Trundle","FIGHTER"],["Tryndamere","Tryndamere","FIGHTER"],["TwistedFate","Twisted Fate","MAGE"],
+    ["Twitch","Twitch","MARKSMAN"],["Udyr","Udyr","FIGHTER"],["Urgot","Urgot","FIGHTER"],["Varus","Varus","MARKSMAN"],
+    ["Vayne","Vayne","MARKSMAN"],["Veigar","Veigar","MAGE"],["Velkoz","Vel'Koz","MAGE"],["Vex","Vex","MAGE"],
+    ["Vi","Vi","FIGHTER"],["Viego","Viego","FIGHTER"],["Viktor","Viktor","MAGE"],["Vladimir","Vladimir","MAGE"],
+    ["Volibear","Volibear","FIGHTER"],["Warwick","Warwick","FIGHTER"],["MonkeyKing","Wukong","FIGHTER"],["Xayah","Xayah","MARKSMAN"],
+    ["Xerath","Xerath","MAGE"],["XinZhao","Xin Zhao","FIGHTER"],["Yasuo","Yasuo","FIGHTER"],["Yone","Yone","FIGHTER"],
+    ["Yorick","Yorick","FIGHTER"],["Yunara","Yunara","MARKSMAN"],["Yuumi","Yuumi","SUPPORT"],["Zaahen","Zaahen","FIGHTER"],
+    ["Zac","Zac","TANK"],["Zed","Zed","ASSASSIN"],["Zeri","Zeri","MARKSMAN"],["Ziggs","Ziggs","MAGE"],["Zilean","Zilean","SUPPORT"],
+    ["Zoe","Zoe","MAGE"],["Zyra","Zyra","MAGE"]
+  ].map(([id,name,cls]) => ({id, name, class:cls}));
+  ROSTER.forEach((c,i) => { c.num = i+1; });
+
+  const CLASS_LABELS = {
+    TANK:"Tanque", FIGHTER:"Lutador", ASSASSIN:"Assassino",
+    MAGE:"Mago", MARKSMAN:"Atirador", SUPPORT:"Suporte", OTHER:"Recém-lançado / Outro"
+  };
+  const CLASS_ORDER = ["TANK","FIGHTER","ASSASSIN","MAGE","MARKSMAN","SUPPORT","OTHER"];
+
+  const STATE_KEY = 'arena_state_v2';
+  const OLD_WINS_KEY = 'arena_wins_v1';
+  const OLD_CUSTOM_KEY = 'arena_custom_champs_v1';
+
+  let ddragonVersion = '15.1.1';
+  let state = { progress:{}, customChamps:[], meta:{ streak:0, lastActiveDate:null, milestonesShown:[], history:[] } };
+  let currentFilter = 'all';
+  let searchTerm = '';
+  let groupByClass = false;
+  let listMode = false;
+  let sortMode = 'name';
+  let justWon = new Set();
+  let lastAction = null;
+
+  const resultsContainer = document.getElementById('resultsContainer');
+  const emptyState = document.getElementById('emptyState');
+
+  function todayISO(){ return new Date().toISOString().slice(0,10); }
+  function daysBetween(a,b){
+    const d1 = new Date(a+'T00:00:00'), d2 = new Date(b+'T00:00:00');
+    return Math.round((d2-d1)/86400000);
+  }
+  function formatDate(iso){
+    if(!iso) return '';
+    const [y,m,d] = iso.split('-');
+    return `${d}/${m}/${y}`;
+  }
+  function escapeHtml(str){
+    return String(str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+  }
+  function imgUrl(id){ return `https://ddragon.leagueoflegends.com/cdn/${ddragonVersion}/img/champion/${id}.png`; }
+  function communityDragonUrl(id){ return `https://cdn.communitydragon.org/latest/champion/${id}/square`; }
+
+  // ---------- Camada de armazenamento híbrida ----------
+  // Usa window.storage (conta Claude) quando disponível — ex: dentro do preview do Claude.
+  // Se o arquivo for aberto sozinho no navegador (fora do Claude), window.storage não existe,
+  // então cai automaticamente para localStorage, salvando os dados dentro do próprio navegador.
+  const hasCloudStorage = typeof window.storage !== 'undefined' && window.storage && typeof window.storage.get === 'function';
+  let storageMode = 'checking';
+
+  async function storageGet(key){
+    if(hasCloudStorage){
+      try{
+        const r = await window.storage.get(key, false);
+        storageMode = 'cloud';
+        return r ? r.value : null;
+      }catch(e){ /* segue para localStorage */ }
+    }
+    try{
+      storageMode = 'local';
+      return localStorage.getItem(key);
+    }catch(e){ storageMode = 'none'; return null; }
+  }
+
+  async function storageSet(key, value){
+    if(hasCloudStorage){
+      try{ await window.storage.set(key, value, false); storageMode = 'cloud'; return; }catch(e){ /* segue para localStorage */ }
+    }
+    try{ localStorage.setItem(key, value); storageMode = 'local'; }catch(e){ storageMode = 'none'; }
+  }
+
+  function updateStorageBadge(){
+    const el = document.getElementById('storageBadge');
+    if(!el) return;
+    if(storageMode === 'cloud'){
+      el.textContent = '☁ Salvo na sua conta Claude';
+      el.title = 'Seus dados estão sendo salvos vinculados à sua conta Claude.';
+    } else if(storageMode === 'local'){
+      el.textContent = '💾 Salvo neste navegador';
+      el.title = 'Seus dados estão salvos no armazenamento local deste navegador/dispositivo. Se limpar os dados do navegador ou abrir em outro dispositivo, o progresso não acompanha.';
+    } else {
+      el.textContent = '⚠ Sem armazenamento disponível';
+      el.title = 'Não foi possível salvar os dados neste navegador (modo anônimo/privado pode bloquear isso).';
+    }
+  }
+
+  async function loadVersion(){
+    try{
+      const res = await fetch('https://ddragon.leagueoflegends.com/api/versions.json');
+      const versions = await res.json();
+      if(versions && versions[0]) ddragonVersion = versions[0];
+    }catch(e){ /* usa fallback */ }
+  }
+
+  async function loadState(){
+    try{
+      const raw = await storageGet(STATE_KEY);
+      if(raw){
+        const parsed = JSON.parse(raw);
+        state.progress = parsed.progress || {};
+        state.customChamps = parsed.customChamps || [];
+        state.meta = Object.assign({streak:0,lastActiveDate:null,milestonesShown:[],history:[]}, parsed.meta || {});
+        updateStorageBadge();
+        return;
+      }
+    }catch(e){ /* segue para migração */ }
+
+    // Migração de versão antiga (booleano simples)
+    try{
+      const oldWins = await storageGet(OLD_WINS_KEY);
+      if(oldWins){
+        const wins = JSON.parse(oldWins);
+        Object.keys(wins).forEach(id => {
+          if(wins[id]) state.progress[id] = { status:'won', date: todayISO(), note:'' };
+        });
+      }
+    }catch(e){}
+    try{
+      const oldCustom = await storageGet(OLD_CUSTOM_KEY);
+      if(oldCustom){
+        state.customChamps = JSON.parse(oldCustom).map(c => ({...c, class: c.class || 'OTHER'}));
+      }
+    }catch(e){}
+    updateStorageBadge();
+    saveState();
+  }
+
+  async function saveState(){
+    await storageSet(STATE_KEY, JSON.stringify(state));
+    updateStorageBadge();
+  }
+
+  function allChamps(){
+    state.customChamps.forEach((c,i) => { if(!c.num) c.num = ROSTER.length + i + 1; });
+    return ROSTER.concat(state.customChamps);
+  }
+  function nameOf(id){ const c = allChamps().find(x=>x.id===id); return c ? c.name : id; }
+  function getStatus(id){ return (state.progress[id] && state.progress[id].status) || 'none'; }
+
+  // ---------- Streak & milestones ----------
+  function registerStreak(todayStr){
+    const m = state.meta;
+    if(!m.lastActiveDate){ m.streak = 1; }
+    else{
+      const diff = daysBetween(m.lastActiveDate, todayStr);
+      if(diff === 0){ /* mesmo dia, mantém */ }
+      else if(diff === 1){ m.streak = (m.streak||0) + 1; }
+      else { m.streak = 1; }
+    }
+    m.lastActiveDate = todayStr;
+  }
+
+  function fireConfetti(){
+    const layer = document.createElement('div');
+    layer.className = 'confetti-layer';
+    const colors = ['#C8AA6E','#0AC8B9','#F0E6D2','#C8494A'];
+    for(let i=0;i<70;i++){
+      const p = document.createElement('div');
+      p.className = 'confetti-piece';
+      p.style.left = Math.random()*100 + 'vw';
+      p.style.background = colors[Math.floor(Math.random()*colors.length)];
+      p.style.animationDuration = (2 + Math.random()*1.8) + 's';
+      p.style.animationDelay = (Math.random()*0.6) + 's';
+      p.style.transform = `rotate(${Math.random()*360}deg)`;
+      layer.appendChild(p);
+    }
+    document.body.appendChild(layer);
+    setTimeout(() => layer.remove(), 4200);
+  }
+
+  let toastTimer = null;
+  function showToast(msg){
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 3200);
+  }
+
+  function checkMilestones(){
+    const total = allChamps().length;
+    const wonN = allChamps().filter(c => getStatus(c.id) === 'won').length;
+    const pct = total ? Math.round((wonN/total)*100) : 0;
+    [25,50,75,100].forEach(threshold => {
+      if(pct >= threshold && !state.meta.milestonesShown.includes(threshold)){
+        state.meta.milestonesShown.push(threshold);
+        showToast(`🏆 Marco atingido: ${threshold}% do roster vencido!`);
+        if(threshold === 100) fireConfetti();
+      }
+    });
+  }
+
+  // ---------- History ----------
+  function addToHistory(id, name, date){
+    state.meta.history = state.meta.history.filter(h => h.id !== id);
+    state.meta.history.unshift({id, name, date});
+    state.meta.history = state.meta.history.slice(0,5);
+  }
+  function removeFromHistory(id){
+    state.meta.history = state.meta.history.filter(h => h.id !== id);
+  }
+
+  // ---------- Status cycling ----------
+  const STATES = ['none','played','won'];
+  function cycleStatus(id){
+    const current = getStatus(id);
+    const next = STATES[(STATES.indexOf(current)+1) % STATES.length];
+    applyStatus(id, next);
+  }
+
+  function applyStatus(id, next){
+    const prev = state.progress[id] ? {...state.progress[id]} : null;
+    lastAction = { id, prev };
+
+    if(next === 'none'){
+      delete state.progress[id];
+      removeFromHistory(id);
+    } else if(next === 'played'){
+      state.progress[id] = { status:'played', date: prev ? prev.date : null, note: prev ? prev.note : '' };
+      removeFromHistory(id);
+    } else if(next === 'won'){
+      const today = todayISO();
+      state.progress[id] = { status:'won', date: today, note: prev ? (prev.note||'') : '' };
+      justWon.add(id);
+      addToHistory(id, nameOf(id), today);
+      registerStreak(today);
+    }
+    saveState();
+    if(next === 'won'){
+      checkMilestones();
+      updateUndoButton();
+      render();
+      openMatchModal(id);
+      return;
+    }
+    updateUndoButton();
+    render();
+  }
+
+  function undo(){
+    if(!lastAction) return;
+    const { id, prev } = lastAction;
+    if(prev){ state.progress[id] = prev; } else { delete state.progress[id]; }
+    removeFromHistory(id);
+    if(prev && prev.status === 'won') addToHistory(id, nameOf(id), prev.date);
+    lastAction = null;
+    saveState();
+    updateUndoButton();
+    render();
+  }
+  function updateUndoButton(){
+    document.getElementById('undoBtn').disabled = !lastAction;
+  }
+
+  // ---------- Tooltip content ----------
+  function buildTooltipHtml(c, status, data){
+    if(status === 'won'){
+      const dateTxt = data && data.date ? formatDate(data.date) : '—';
+      const noteTxt = data && data.note ? `<div class="tt-note">${escapeHtml(data.note)}</div>` : '';
+      return `<div class="tt-title">Vitória registrada</div><div class="tt-row">🏆 ${dateTxt}</div>${noteTxt}`;
+    }
+    if(status === 'played'){
+      return `<div class="tt-title">${escapeHtml(c.name)}</div><div class="tt-row">Jogado, ainda sem vitória</div>`;
+    }
+    return `<div class="tt-title">${escapeHtml(c.name)}</div><div class="tt-row">Ainda não jogado na Arena</div>`;
+  }
+
+  // ---------- Card builder ----------
+  function buildChampCard(c){
+    const status = getStatus(c.id);
+    const data = state.progress[c.id];
+    const shouldCelebrate = justWon.has(c.id);
+    if(shouldCelebrate) justWon.delete(c.id);
+
+    const el = document.createElement('div');
+    el.className = `champ state-${status}` + (shouldCelebrate ? ' celebrate' : '');
+
+    const dateLabel = data && data.date ? formatDate(data.date) : '';
+    const noteLabel = data && data.note ? ' · ' + escapeHtml(data.note) : '';
+
+    el.innerHTML = `
+      <div class="portrait">
+        <span class="dex-num">#${String(c.num).padStart(3,'0')}</span>
+        <div class="hex">
+          <img src="${imgUrl(c.id)}" alt="${escapeHtml(c.name)}" loading="lazy" referrerpolicy="no-referrer"
+               data-cd-src="${communityDragonUrl(c.id)}" data-stage="ddragon">
+          <div class="fallback" style="display:none;">${escapeHtml(c.name.charAt(0))}</div>
+        </div>
+        <span class="status-dot"></span>
+        <div class="tooltip-box">${buildTooltipHtml(c, status, data)}</div>
+      </div>
+      <div class="cname">${escapeHtml(c.name)}</div>
+      <div class="champ-meta">
+        <span class="meta-date">${dateLabel}${noteLabel}</span>
+        <button type="button" class="edit-note" title="Editar registro da vitória">✎</button>
+      </div>
+    `;
+
+    const imgEl = el.querySelector('img');
+    imgEl.addEventListener('error', function(){
+      if(this.dataset.stage === 'ddragon'){
+        this.dataset.stage = 'communitydragon';
+        this.src = this.dataset.cdSrc;
+      } else {
+        this.style.display = 'none';
+        const fb = this.parentElement.querySelector('.fallback');
+        if(fb) fb.style.display = 'flex';
+      }
+    });
+
+    el.addEventListener('click', () => cycleStatus(c.id));
+
+    const editBtn = el.querySelector('.edit-note');
+    editBtn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      openMatchModal(c.id);
+    });
+
+    return el;
+  }
+
+  // ---------- Match modal (registrar vitória) ----------
+  let modalChampId = null;
+  function openMatchModal(id){
+    const c = allChamps().find(x => x.id === id);
+    if(!c) return;
+    modalChampId = id;
+    const data = state.progress[id] || {};
+    document.getElementById('mmImg').src = imgUrl(id);
+    document.getElementById('mmName').textContent = c.name;
+    document.getElementById('mmDate').value = data.date || todayISO();
+    document.getElementById('mmNote').value = data.note || '';
+    document.getElementById('matchModal').classList.add('show');
+  }
+  function closeMatchModal(){
+    document.getElementById('matchModal').classList.remove('show');
+    modalChampId = null;
+  }
+  function saveMatchModal(){
+    if(!modalChampId) return closeMatchModal();
+    const dateVal = document.getElementById('mmDate').value || todayISO();
+    const noteVal = document.getElementById('mmNote').value.trim();
+    const prev = state.progress[modalChampId];
+    state.progress[modalChampId] = { status:'won', date: dateVal, note: noteVal };
+    if(!prev || prev.status !== 'won'){ justWon.add(modalChampId); registerStreak(dateVal); }
+    addToHistory(modalChampId, nameOf(modalChampId), dateVal);
+    saveState();
+    checkMilestones();
+    closeMatchModal();
+    render();
+  }
+  document.getElementById('mmCancel').addEventListener('click', closeMatchModal);
+  document.getElementById('mmSave').addEventListener('click', saveMatchModal);
+  document.getElementById('matchModal').addEventListener('click', (ev) => {
+    if(ev.target.id === 'matchModal') closeMatchModal();
+  });
+  document.addEventListener('keydown', (ev) => {
+    if(ev.key === 'Escape'){ closeMatchModal(); closeGithubModal(); }
+  });
+
+  // ---------- Render ----------
+  function updateCrystal(){
+    const total = allChamps().length;
+    const wonN = allChamps().filter(c => getStatus(c.id) === 'won').length;
+    const pct = total ? Math.round((wonN/total)*100) : 0;
+    document.getElementById('wonCount').textContent = wonN;
+    document.getElementById('totalCount').textContent = 'de ' + total;
+    document.getElementById('pctLabel').textContent = pct + '%';
+    const circumference = 2 * Math.PI * 50;
+    const fillLen = (pct/100) * circumference;
+    document.getElementById('crystalFill').setAttribute('stroke-dasharray', `${fillLen} ${circumference}`);
+  }
+
+  function updateStreakUI(){
+    document.getElementById('streakCount').textContent = state.meta.streak || 0;
+  }
+
+  function updateHistoryUI(){
+    const box = document.getElementById('historyChips');
+    const hist = state.meta.history || [];
+    if(!hist.length){
+      box.innerHTML = `<span class="history-label">Últimas conquistas</span><span class="history-empty">Nenhuma vitória registrada ainda.</span>`;
+      return;
+    }
+    box.innerHTML = `<span class="history-label">Últimas conquistas</span>` + hist.map(h => `
+      <span class="history-chip">
+        <img src="${imgUrl(h.id)}" alt="" referrerpolicy="no-referrer" onerror="this.src='${communityDragonUrl(h.id)}';this.onerror=null;">
+        ${escapeHtml(h.name)} <span class="hdate">${formatDate(h.date)}</span>
+      </span>
+    `).join('');
+  }
+
+  function sortChamps(list){
+    const arr = [...list];
+    if(sortMode === 'status'){
+      const order = { none:0, played:1, won:2 };
+      arr.sort((a,b) => order[getStatus(a.id)] - order[getStatus(b.id)] || a.name.localeCompare(b.name,'pt-BR'));
+    } else {
+      arr.sort((a,b) => a.name.localeCompare(b.name,'pt-BR'));
+    }
+    return arr;
+  }
+
+  function render(){
+    const term = searchTerm.trim().toLowerCase();
+    const filtered = allChamps().filter(c => {
+      const st = getStatus(c.id);
+      if(currentFilter === 'won' && st !== 'won') return false;
+      if(currentFilter === 'played' && st !== 'played') return false;
+      if(currentFilter === 'missing' && st === 'won') return false;
+      if(term && !c.name.toLowerCase().includes(term)) return false;
+      return true;
+    });
+
+    resultsContainer.innerHTML = '';
+    emptyState.style.display = filtered.length ? 'none' : 'block';
+
+    if(groupByClass){
+      CLASS_ORDER.forEach(cls => {
+        const inClass = filtered.filter(c => (c.class || 'OTHER') === cls);
+        if(!inClass.length) return;
+        const sorted = sortChamps(inClass);
+        const totalInClass = allChamps().filter(c => (c.class||'OTHER') === cls).length;
+        const wonInClass = allChamps().filter(c => (c.class||'OTHER') === cls && getStatus(c.id) === 'won').length;
+
+        const block = document.createElement('div');
+        block.className = 'group-block';
+        block.innerHTML = `<div class="group-header">${CLASS_LABELS[cls]} <span class="gcount">${wonInClass}/${totalInClass} vencidos</span></div>`;
+        const gridEl = document.createElement('div');
+        gridEl.className = 'grid' + (listMode ? ' list-mode' : '');
+        sorted.forEach(c => gridEl.appendChild(buildChampCard(c)));
+        block.appendChild(gridEl);
+        resultsContainer.appendChild(block);
+      });
+    } else {
+      const sorted = sortChamps(filtered);
+      const gridEl = document.createElement('div');
+      gridEl.className = 'grid' + (listMode ? ' list-mode' : '');
+      sorted.forEach(c => gridEl.appendChild(buildChampCard(c)));
+      resultsContainer.appendChild(gridEl);
+    }
+
+    updateCrystal();
+    updateStreakUI();
+    updateHistoryUI();
+  }
+
+  // ---------- Controls wiring ----------
+  document.getElementById('searchInput').addEventListener('input', (e) => {
+    searchTerm = e.target.value;
+    render();
+  });
+  document.addEventListener('keydown', (e) => {
+    if(e.key === '/' && document.activeElement.tagName !== 'INPUT'){
+      e.preventDefault();
+      document.getElementById('searchInput').focus();
+    }
+  });
+
+  document.querySelectorAll('.chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      currentFilter = chip.dataset.filter;
+      render();
+    });
+  });
+
+  document.getElementById('suggestBtn').addEventListener('click', () => {
+    const missing = allChamps().filter(c => getStatus(c.id) !== 'won');
+    const box = document.getElementById('suggestion');
+    if(!missing.length){
+      box.classList.remove('show');
+      alert('Você já venceu com todos os campeões na Arena. 🏆');
+      return;
+    }
+    const pick = missing[Math.floor(Math.random() * missing.length)];
+    document.getElementById('suggestImg').src = imgUrl(pick.id);
+    document.getElementById('suggestName').textContent = pick.name;
+    box.classList.add('show');
+  });
+  document.getElementById('suggestDismiss').addEventListener('click', () => {
+    document.getElementById('suggestion').classList.remove('show');
+  });
+
+  document.getElementById('addToggleBtn').addEventListener('click', () => {
+    document.getElementById('addRow').classList.toggle('show');
+  });
+  document.getElementById('addConfirmBtn').addEventListener('click', () => {
+    const input = document.getElementById('addNameInput');
+    const name = input.value.trim();
+    if(!name) return;
+    const id = 'custom_' + name.toLowerCase().replace(/[^a-z0-9]/g,'');
+    if(allChamps().some(c => c.id === id || c.name.toLowerCase() === name.toLowerCase())){
+      input.value = '';
+      return;
+    }
+    state.customChamps.push({id, name, class:'OTHER', custom:true});
+    saveState();
+    input.value = '';
+    document.getElementById('addRow').classList.remove('show');
+    render();
+  });
+
+  document.getElementById('groupToggleBtn').addEventListener('click', function(){
+    groupByClass = !groupByClass;
+    this.classList.toggle('active', groupByClass);
+    render();
+  });
+  document.getElementById('viewToggleBtn').addEventListener('click', function(){
+    listMode = !listMode;
+    this.classList.toggle('active', listMode);
+    this.textContent = listMode ? '⬛ Ver em grade' : '☰ Ver em lista';
+    render();
+  });
+  document.getElementById('sortSelect').addEventListener('change', (e) => {
+    sortMode = e.target.value;
+    render();
+  });
+
+  document.getElementById('undoBtn').addEventListener('click', undo);
+
+  document.getElementById('exportBtn').addEventListener('click', () => {
+    const blob = new Blob([JSON.stringify(state, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'crisol-arena-progress.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  });
+
+  document.getElementById('importBtn').addEventListener('click', () => {
+    document.getElementById('importFile').click();
+  });
+  document.getElementById('importFile').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try{
+        const data = JSON.parse(ev.target.result);
+        state.progress = data.progress || {};
+        state.customChamps = (data.customChamps || []).map(c => ({...c, class: c.class || 'OTHER'}));
+        state.meta = Object.assign({streak:0,lastActiveDate:null,milestonesShown:[],history:[]}, data.meta || {});
+        saveState();
+        lastAction = null;
+        updateUndoButton();
+        render();
+        showToast('Progresso importado com sucesso.');
+      }catch(err){
+        alert('Arquivo inválido. Verifique se é um JSON exportado pelo Crisol.');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  });
+
+  document.getElementById('clearAllBtn').addEventListener('click', () => {
+    if(!confirm('Isso vai apagar todo o seu progresso salvo (vitórias, notas, histórico e sequência). Deseja continuar?')) return;
+    state.progress = {};
+    state.meta = { streak:0, lastActiveDate:null, milestonesShown:[], history:[] };
+    lastAction = null;
+    saveState();
+    updateUndoButton();
+    render();
+  });
+
+  // ---------- Sincronização com GitHub Gist (nuvem pessoal) ----------
+  const GH_TOKEN_KEY = 'arena_gh_token';
+  const GH_GIST_KEY = 'arena_gh_gistid';
+  const GH_FILENAME = 'crisol-arena-progress.json';
+
+  function ghGetToken(){ try{ return localStorage.getItem(GH_TOKEN_KEY) || ''; }catch(e){ return ''; } }
+  function ghGetGistId(){ try{ return localStorage.getItem(GH_GIST_KEY) || ''; }catch(e){ return ''; } }
+  function ghSetCreds(token, gistId){
+    try{
+      if(token) localStorage.setItem(GH_TOKEN_KEY, token); else localStorage.removeItem(GH_TOKEN_KEY);
+      if(gistId) localStorage.setItem(GH_GIST_KEY, gistId); else localStorage.removeItem(GH_GIST_KEY);
+    }catch(e){}
+  }
+
+  function ghSetStatus(msg, kind){
+    const el = document.getElementById('ghStatus');
+    el.textContent = msg;
+    el.className = 'gh-status' + (kind ? ' ' + kind : '');
+  }
+
+  function openGithubModal(){
+    document.getElementById('ghToken').value = ghGetToken();
+    document.getElementById('ghGistId').value = ghGetGistId();
+    ghSetStatus('', '');
+    document.getElementById('githubModal').classList.add('show');
+  }
+  function closeGithubModal(){ document.getElementById('githubModal').classList.remove('show'); }
+
+  async function ghRequest(url, options){
+    const token = document.getElementById('ghToken').value.trim();
+    if(!token) throw new Error('Cole seu token de acesso pessoal primeiro.');
+    const res = await fetch(url, Object.assign({
+      headers: Object.assign({
+        'Authorization': 'token ' + token,
+        'Accept': 'application/vnd.github+json'
+      }, (options && options.headers) || {})
+    }, options || {}));
+    if(!res.ok){
+      let detail = '';
+      try{ const j = await res.json(); detail = j.message || ''; }catch(e){}
+      throw new Error(`Erro ${res.status}${detail ? ' — ' + detail : ''}`);
+    }
+    return res.json();
+  }
+
+  async function ghSaveToCloud(){
+    const token = document.getElementById('ghToken').value.trim();
+    if(!token){ ghSetStatus('Cole seu token de acesso pessoal primeiro.', 'err'); return; }
+    let gistId = document.getElementById('ghGistId').value.trim();
+    ghSetStatus('Salvando no GitHub…', '');
+    try{
+      const body = {
+        description: 'Crisol — Arena Tracker (LoL) — dados pessoais',
+        public: false,
+        files: { [GH_FILENAME]: { content: JSON.stringify(state, null, 2) } }
+      };
+      let result;
+      if(gistId){
+        result = await ghRequest('https://api.github.com/gists/' + gistId, { method:'PATCH', body: JSON.stringify(body) });
+      } else {
+        result = await ghRequest('https://api.github.com/gists', { method:'POST', body: JSON.stringify(body) });
+        gistId = result.id;
+        document.getElementById('ghGistId').value = gistId;
+      }
+      ghSetCreds(token, gistId);
+      ghSetStatus('✓ Salvo com sucesso no seu Gist privado.', 'ok');
+      showToast('☁ Progresso salvo no GitHub.');
+    }catch(err){
+      ghSetStatus('Falha ao salvar: ' + err.message, 'err');
+    }
+  }
+
+  async function ghLoadFromCloud(){
+    const token = document.getElementById('ghToken').value.trim();
+    const gistId = document.getElementById('ghGistId').value.trim();
+    if(!token){ ghSetStatus('Cole seu token de acesso pessoal primeiro.', 'err'); return; }
+    if(!gistId){ ghSetStatus('Informe o ID do Gist (ou salve uma vez primeiro para criar um).', 'err'); return; }
+    if(!confirm('Isso vai substituir o progresso salvo neste navegador pelo que estiver no GitHub. Continuar?')) return;
+    ghSetStatus('Carregando do GitHub…', '');
+    try{
+      const result = await ghRequest('https://api.github.com/gists/' + gistId, { method:'GET' });
+      const file = result.files && result.files[GH_FILENAME];
+      if(!file){ throw new Error(`Arquivo ${GH_FILENAME} não encontrado nesse Gist.`); }
+      const data = JSON.parse(file.content);
+      state.progress = data.progress || {};
+      state.customChamps = (data.customChamps || []).map(c => ({...c, class: c.class || 'OTHER'}));
+      state.meta = Object.assign({streak:0,lastActiveDate:null,milestonesShown:[],history:[]}, data.meta || {});
+      ghSetCreds(token, gistId);
+      saveState();
+      lastAction = null;
+      updateUndoButton();
+      render();
+      ghSetStatus('✓ Progresso carregado do GitHub.', 'ok');
+      showToast('☁ Progresso carregado do GitHub.');
+    }catch(err){
+      ghSetStatus('Falha ao carregar: ' + err.message, 'err');
+    }
+  }
+
+  document.getElementById('githubBtn').addEventListener('click', openGithubModal);
+  document.getElementById('ghClose').addEventListener('click', closeGithubModal);
+  document.getElementById('githubModal').addEventListener('click', (ev) => {
+    if(ev.target.id === 'githubModal') closeGithubModal();
+  });
+  document.getElementById('ghSave').addEventListener('click', ghSaveToCloud);
+  document.getElementById('ghLoad').addEventListener('click', ghLoadFromCloud);
+  document.getElementById('ghDisconnect').addEventListener('click', () => {
+    if(!confirm('Isso remove o token salvo neste navegador (o Gist no GitHub não é apagado). Continuar?')) return;
+    ghSetCreds('', '');
+    document.getElementById('ghToken').value = '';
+    document.getElementById('ghGistId').value = '';
+    ghSetStatus('Desconectado deste navegador.', '');
+  });
+
+  (async function init(){
+    await Promise.all([loadVersion(), loadState()]);
+    updateUndoButton();
+    render();
+  })();
+})();
+</script>
+
+</body>
+</html>
