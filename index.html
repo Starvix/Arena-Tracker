@@ -564,6 +564,44 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="riotModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div class="gh-icon">🎮</div>
+      <div>
+        <div class="modal-eyebrow">Sincronização automática</div>
+        <div class="modal-name">Sincronizar pelo Riot ID</div>
+      </div>
+    </div>
+    <p class="gh-explain">
+      Busca seu histórico de Arena direto na Riot e marca sozinho os campeões com quem você já chegou em <b>1º lugar</b>.
+      Requer um pequeno proxy seu (Cloudflare Worker) — veja as instruções no arquivo <code>riot-sync-worker.js</code> que te entreguei.
+    </p>
+    <label class="modal-label" for="riotWorkerUrl">URL do seu Worker</label>
+    <input type="text" id="riotWorkerUrl" placeholder="https://seu-worker.seu-usuario.workers.dev">
+
+    <label class="modal-label" for="riotIdInput">Riot ID</label>
+    <input type="text" id="riotIdInput" placeholder="Nick#TAG">
+
+    <label class="modal-label" for="riotContinent">Servidor</label>
+    <select id="riotContinent" class="sort-select" style="width:100%;">
+      <option value="americas">Américas (NA, BR, LAN, LAS, OCE)</option>
+      <option value="europe">Europa (EUW, EUNE, TR, RU)</option>
+      <option value="asia">Ásia (KR, JP)</option>
+      <option value="sea">Sudeste Asiático (PH, SG, TH, TW, VN)</option>
+    </select>
+
+    <div class="gh-status" id="riotStatus"></div>
+    <div class="modal-actions gh-actions">
+      <div class="btn" id="riotSyncCancel">Cancelar sincronização</div>
+      <div class="btn primary" id="riotSyncStart">🎮 Sincronizar agora</div>
+    </div>
+    <div class="modal-actions" style="margin-top:8px;">
+      <div class="btn" id="riotClose">Fechar</div>
+    </div>
+  </div>
+</div>
+
 <div class="controls">
   <div class="search-box">
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -592,6 +630,7 @@
   <div class="toolbar-right">
     <button type="button" class="btn" id="undoBtn" disabled>↺ Desfazer</button>
     <button type="button" class="btn" id="githubBtn">☁ GitHub</button>
+    <button type="button" class="btn" id="riotSyncBtn">🎮 Riot ID</button>
     <button type="button" class="btn danger" id="clearAllBtn">🗑 Limpar tudo</button>
   </div>
 </div>
@@ -1013,7 +1052,7 @@
     if(ev.target.id === 'matchModal') closeMatchModal();
   });
   document.addEventListener('keydown', (ev) => {
-    if(ev.key === 'Escape'){ closeMatchModal(); closeGithubModal(); }
+    if(ev.key === 'Escape'){ closeMatchModal(); closeGithubModal(); if(!riotSyncRunning) closeRiotModal(); }
   });
 
   // ---------- Render ----------
@@ -1405,6 +1444,134 @@
     const line = document.getElementById('autoSyncLine');
     if(line) line.style.display = 'none';
     ghSetStatus('Desconectado deste navegador.', '');
+  });
+
+  // ---------- Sincronização automática pelo Riot ID (via proxy próprio) ----------
+  const RIOT_WORKER_KEY = 'arena_riot_worker_url';
+  const RIOT_ID_KEY = 'arena_riot_id';
+  const RIOT_CONTINENT_KEY = 'arena_riot_continent';
+  const RIOT_MAX_BATCHES = 40; // trava de segurança: até ~40 lotes (centenas de partidas)
+  let riotSyncCancelled = false;
+  let riotSyncRunning = false;
+
+  function riotSetStatus(msg, kind){
+    const el = document.getElementById('riotStatus');
+    el.textContent = msg;
+    el.className = 'gh-status' + (kind ? ' ' + kind : '');
+  }
+
+  function openRiotModal(){
+    try{
+      document.getElementById('riotWorkerUrl').value = localStorage.getItem(RIOT_WORKER_KEY) || '';
+      document.getElementById('riotIdInput').value = localStorage.getItem(RIOT_ID_KEY) || '';
+      document.getElementById('riotContinent').value = localStorage.getItem(RIOT_CONTINENT_KEY) || 'americas';
+    }catch(e){}
+    riotSetStatus('', '');
+    document.getElementById('riotModal').classList.add('show');
+  }
+  function closeRiotModal(){
+    document.getElementById('riotModal').classList.remove('show');
+  }
+
+  // Casa o championName devolvido pela Riot com o id usado no roster do Crisol
+  // (normalmente são idênticos, mas comparamos sem diferenciar maiúsculas/minúsculas por segurança)
+  function normalizeChampId(riotChampionName){
+    const lower = (riotChampionName || '').toLowerCase();
+    const found = allChamps().find(c => c.id.toLowerCase() === lower);
+    return found ? found.id : null;
+  }
+
+  async function riotSyncStart(){
+    if(riotSyncRunning) return;
+    const workerUrl = document.getElementById('riotWorkerUrl').value.trim().replace(/\/$/, '');
+    const riotIdRaw = document.getElementById('riotIdInput').value.trim();
+    const continent = document.getElementById('riotContinent').value;
+
+    if(!workerUrl){ riotSetStatus('Cole a URL do seu Worker primeiro.', 'err'); return; }
+    if(!riotIdRaw.includes('#')){ riotSetStatus('Informe o Riot ID no formato Nick#TAG.', 'err'); return; }
+
+    const hashIdx = riotIdRaw.lastIndexOf('#');
+    const gameName = riotIdRaw.slice(0, hashIdx).trim();
+    const tagLine = riotIdRaw.slice(hashIdx + 1).trim();
+    if(!gameName || !tagLine){ riotSetStatus('Riot ID inválido. Use o formato Nick#TAG.', 'err'); return; }
+
+    try{
+      localStorage.setItem(RIOT_WORKER_KEY, workerUrl);
+      localStorage.setItem(RIOT_ID_KEY, riotIdRaw);
+      localStorage.setItem(RIOT_CONTINENT_KEY, continent);
+    }catch(e){}
+
+    riotSyncRunning = true;
+    riotSyncCancelled = false;
+    document.getElementById('riotSyncStart').textContent = '⏳ Sincronizando…';
+
+    let puuid = null;
+    let start = 0;
+    let batch = 0;
+    let totalScanned = 0;
+    const foundWins = {}; // championName (Riot) -> data ISO
+    let matched = 0, unmatched = 0;
+
+    try{
+      while(batch < RIOT_MAX_BATCHES){
+        if(riotSyncCancelled){ riotSetStatus('Sincronização cancelada.', ''); break; }
+        batch++;
+        riotSetStatus(`Lote ${batch} · ${totalScanned} partidas analisadas · ${Object.keys(foundWins).length} vitória(s) encontrada(s)…`, '');
+
+        const params = new URLSearchParams({ continent, start: String(start), count: '15' });
+        if(puuid){ params.set('puuid', puuid); } else { params.set('gameName', gameName); params.set('tagLine', tagLine); }
+
+        const res = await fetch(`${workerUrl}/sync-batch?${params.toString()}`);
+        const data = await res.json();
+        if(!res.ok || data.error){ throw new Error(data.error || `Erro ${res.status} no proxy.`); }
+
+        puuid = data.puuid || puuid;
+        totalScanned += data.matchesScanned || 0;
+        (data.champions || []).forEach(w => {
+          if(!foundWins[w.id] || foundWins[w.id] > w.date) foundWins[w.id] = w.date;
+        });
+
+        start = data.nextStart;
+        if(!data.hasMore || !data.matchesInBatch){ break; }
+      }
+
+      if(!riotSyncCancelled){
+        Object.keys(foundWins).forEach(riotChampName => {
+          const localId = normalizeChampId(riotChampName);
+          if(!localId){ unmatched++; return; }
+          matched++;
+          const date = foundWins[riotChampName];
+          const prev = state.progress[localId];
+          if(!prev || prev.status !== 'won'){
+            state.progress[localId] = { status:'won', date, note: prev ? (prev.note||'') : '' };
+            addToHistory(localId, nameOf(localId), date);
+          } else if(prev.date && date < prev.date){
+            prev.date = date; // mantém a data mais antiga de 1º lugar conhecida
+          }
+        });
+        saveState();
+        lastAction = null;
+        updateUndoButton();
+        render();
+        riotSetStatus(`✓ Sincronizado! ${matched} campeão(ões) marcado(s) como vencido(s) a partir de ${totalScanned} partida(s) analisadas.${unmatched ? ' (' + unmatched + ' não reconhecido(s))' : ''}`, 'ok');
+        showToast(`🎮 ${matched} campeão(ões) sincronizado(s) pelo Riot ID.`);
+      }
+    }catch(err){
+      riotSetStatus('Falha na sincronização: ' + err.message, 'err');
+    }finally{
+      riotSyncRunning = false;
+      document.getElementById('riotSyncStart').textContent = '🎮 Sincronizar agora';
+    }
+  }
+
+  document.getElementById('riotSyncBtn').addEventListener('click', openRiotModal);
+  document.getElementById('riotClose').addEventListener('click', closeRiotModal);
+  document.getElementById('riotModal').addEventListener('click', (ev) => {
+    if(ev.target.id === 'riotModal' && !riotSyncRunning) closeRiotModal();
+  });
+  document.getElementById('riotSyncStart').addEventListener('click', riotSyncStart);
+  document.getElementById('riotSyncCancel').addEventListener('click', () => {
+    if(riotSyncRunning){ riotSyncCancelled = true; } else { closeRiotModal(); }
   });
 
   (async function init(){
