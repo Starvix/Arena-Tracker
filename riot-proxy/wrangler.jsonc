@@ -1,0 +1,10 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "crisol-riot-proxy",
+  "main": "src/index.js",
+  "compatibility_date": "2026-07-01"
+
+  // Não coloque a RIOT_API_KEY aqui — segredos não devem ir pro Git.
+  // Depois do primeiro deploy, adicione em:
+  // Cloudflare Dashboard → seu Worker → Settings → Variables and Secrets → Add
+}
