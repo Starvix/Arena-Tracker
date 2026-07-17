@@ -235,6 +235,7 @@
     cursor:pointer;
     -webkit-tap-highlight-color: transparent;
   }
+  .champ:hover{ z-index: 50; }
   .portrait{
     position:relative;
     width:84px; height:84px;
@@ -278,6 +279,7 @@
   .champ.state-won .dex-num{ background: linear-gradient(135deg, var(--teal), #6fe6da); }
 
   .champ:hover .portrait{ transform: translateY(-3px); }
+  .champ:hover .dex-num{ opacity:0; transition: opacity .1s; }
   .champ.state-none:hover .hex img{ filter: grayscale(1) brightness(0.4) contrast(1.05); }
 
   .champ.state-won .hex img{ filter: grayscale(0) brightness(1) saturate(1.08) contrast(1); }
@@ -345,7 +347,9 @@
   }
   .tooltip-box .tt-icon-fallback{
     display:flex; align-items:center; justify-content:center;
-    font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--muted);
+    font-family:'JetBrains Mono',monospace; font-size:14px; color:var(--muted);
+    background: var(--panel-2);
+    opacity:.6;
   }
 
   /* Brilho ao marcar como concluído */
@@ -742,21 +746,55 @@
   }
   function imgUrl(id){ return `https://ddragon.leagueoflegends.com/cdn/${ddragonVersion}/img/champion/${id}.png`; }
   function communityDragonUrl(id){ return `https://cdn.communitydragon.org/latest/champion/${id}/square`; }
-  function itemImgUrl(itemId){ return `https://ddragon.leagueoflegends.com/cdn/${ddragonVersion}/img/item/${itemId}.png`; }
+
+  // Converte um "iconPath" do CDragon na URL pública real do arquivo.
+  // Existem dois formatos possíveis dependendo do arquivo de origem:
+  //  - "/lol-game-data/assets/ASSETS/Items/Icons2D/Nome.png" (arquivos v1/*.json)
+  //  - "assets/ux/cherry/augments/icons/nome.png" (arquivos de conveniência já relativos à raiz do jogo)
+  function cdragonAssetUrl(iconPath){
+    if(!iconPath) return null;
+    const marker = '/lol-game-data/assets/';
+    const lower = iconPath.toLowerCase();
+    const idx = lower.indexOf(marker);
+    if(idx !== -1){
+      const rel = iconPath.slice(idx + marker.length);
+      return `https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/${rel.toLowerCase()}`;
+    }
+    const rel2 = iconPath.replace(/^\//, '').toLowerCase();
+    return `https://raw.communitydragon.org/latest/game/${rel2}`;
+  }
+
+  // ---------- Índice de itens (nome + ícone), carregado uma vez ----------
+  // Usamos o CDragon (não o Data Dragon) porque ele cobre itens exclusivos da Arena,
+  // que o Data Dragon não tem — era a causa do ícone genérico/errado aparecendo.
+  let itemIndex = {}; // id -> icon url
+  async function loadItemIndex(){
+    try{
+      const res = await fetch('https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/items.json');
+      const data = await res.json();
+      (Array.isArray(data) ? data : Object.values(data)).forEach(it => {
+        if(it && it.id != null && it.iconPath){
+          itemIndex[it.id] = cdragonAssetUrl(it.iconPath);
+        }
+      });
+    }catch(e){ /* segue sem ícones de item vindos do cdragon; usamos o fallback do ddragon */ }
+  }
 
   // ---------- Índice de augments da Arena (nome + ícone), carregado uma vez ----------
   let augmentIndex = {}; // id -> { name, icon }
   async function loadAugmentIndex(){
     try{
-      const res = await fetch('https://raw.communitydragon.org/latest/cdragon/arena/en_us.json');
+      const res = await fetch('https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/cherry-augments.json');
       const data = await res.json();
-      (data.augments || []).forEach(a => {
-        augmentIndex[a.id] = {
-          name: a.name,
-          icon: `https://raw.communitydragon.org/latest/game/${(a.iconLarge || a.iconSmall || '').toLowerCase()}`
-        };
+      (Array.isArray(data) ? data : Object.values(data)).forEach(a => {
+        if(a && a.id != null){
+          augmentIndex[a.id] = {
+            name: a.name || a.apiName || ('Augment ' + a.id),
+            icon: cdragonAssetUrl(a.iconLarge || a.iconSmall)
+          };
+        }
       });
-    }catch(e){ /* segue sem nomes/ícones de augment, mostramos só os itens */ }
+    }catch(e){ /* segue sem nomes/ícones de augment; esses simplesmente não aparecem no balão */ }
   }
 
   // ---------- Camada de armazenamento híbrida ----------
@@ -968,16 +1006,20 @@
           if(info){
             return `<img class="tt-icon" src="${info.icon}" alt="${escapeHtml(info.name)}" title="${escapeHtml(info.name)}" loading="lazy" onerror="this.style.display='none';">`;
           }
-          return `<span class="tt-icon tt-icon-fallback" title="Augment #${id}">?</span>`;
+          return `<span class="tt-icon tt-icon-fallback" title="Augment não encontrado na base atual (pode ter sido removido ou renomeado em uma atualização da Arena)">⬡</span>`;
         }).join('');
         augmentsHtml = `<div class="tt-section-label">Augments</div><div class="tt-icon-row">${chips}</div>`;
       }
 
       let itemsHtml = '';
       if(data && data.items && data.items.length){
-        const chips = data.items.map(id =>
-          `<img class="tt-icon" src="${itemImgUrl(id)}" alt="Item ${id}" loading="lazy" onerror="this.style.display='none';">`
-        ).join('');
+        const chips = data.items.map(id => {
+          const primary = itemIndex[id];
+          const fallback = `https://ddragon.leagueoflegends.com/cdn/${ddragonVersion}/img/item/${id}.png`;
+          const src = primary || fallback;
+          const fallbackAttr = primary ? ` data-fallback="${fallback}"` : '';
+          return `<img class="tt-icon" src="${src}"${fallbackAttr} alt="Item ${id}" loading="lazy" onerror="if(this.dataset.fallback){this.src=this.dataset.fallback;this.removeAttribute('data-fallback');}else{this.style.display='none';}">`;
+        }).join('');
         itemsHtml = `<div class="tt-section-label">Itens</div><div class="tt-icon-row">${chips}</div>`;
       }
 
@@ -1251,7 +1293,7 @@
   const DEFAULT_RIOT_CONTINENT = 'americas';
   const RIOT_GAMENAME_KEY = 'arena_riot_gamename';
   const RIOT_TAGLINE_KEY = 'arena_riot_tagline';
-  const RIOT_MAX_BATCHES = 40; // trava de segurança: até ~40 lotes (centenas de partidas)
+  const RIOT_MAX_BATCHES = 60; // trava de segurança: cobre até ~600 partidas por fila (1700 e 1710)
   let riotSyncCancelled = false;
   let riotSyncRunning = false;
 
@@ -1301,11 +1343,14 @@
     document.getElementById('riotSyncStart').textContent = '⏳ Sincronizando…';
 
     let puuid = null;
-    let start = 0;
+    let start1700 = 0;
+    let start1710 = 0;
     let batch = 0;
     let totalScanned = 0;
+    let totalFailed = 0;
     const foundWins = {}; // championName (Riot) -> data ISO
     let matched = 0, unmatched = 0;
+    const unmatchedNames = [];
 
     try{
       while(batch < RIOT_MAX_BATCHES){
@@ -1313,7 +1358,7 @@
         batch++;
         riotSetStatus(`Lote ${batch} · ${totalScanned} partidas analisadas · ${Object.keys(foundWins).length} vitória(s) encontrada(s)…`, '');
 
-        const params = new URLSearchParams({ continent, start: String(start), count: '15' });
+        const params = new URLSearchParams({ continent, start1700: String(start1700), start1710: String(start1710), count: '10' });
         if(puuid){ params.set('puuid', puuid); } else { params.set('gameName', gameName); params.set('tagLine', tagLine); }
 
         const res = await fetch(`${workerUrl}/sync-batch?${params.toString()}`);
@@ -1322,20 +1367,22 @@
 
         puuid = data.puuid || puuid;
         totalScanned += data.matchesScanned || 0;
+        totalFailed += data.matchesFailed || 0;
         (data.champions || []).forEach(w => {
           if(!foundWins[w.id] || foundWins[w.id].date > w.date){
             foundWins[w.id] = { date: w.date, items: w.items || [], augments: w.augments || [] };
           }
         });
 
-        start = data.nextStart;
+        start1700 = data.nextStart1700 ?? start1700;
+        start1710 = data.nextStart1710 ?? start1710;
         if(!data.hasMore || !data.matchesInBatch){ break; }
       }
 
       if(!riotSyncCancelled){
         Object.keys(foundWins).forEach(riotChampName => {
           const localId = normalizeChampId(riotChampName);
-          if(!localId){ unmatched++; return; }
+          if(!localId){ unmatched++; unmatchedNames.push(riotChampName); return; }
           matched++;
           const { date, items, augments } = foundWins[riotChampName];
           const prev = state.progress[localId];
@@ -1355,7 +1402,9 @@
         lastAction = null;
         updateUndoButton();
         render();
-        riotSetStatus(`✓ Sincronizado! ${matched} campeão(ões) marcado(s) como vencido(s) a partir de ${totalScanned} partida(s) analisadas.${unmatched ? ' (' + unmatched + ' não reconhecido(s))' : ''}`, 'ok');
+        const failedTxt = totalFailed ? ` (${totalFailed} partida(s) não puderam ser lidas — tente sincronizar de novo depois)` : '';
+        const unmatchedTxt = unmatched ? ` (${unmatched} não reconhecido(s): ${unmatchedNames.join(', ')})` : '';
+        riotSetStatus(`✓ Sincronizado! ${matched} campeão(ões) marcado(s) como vencido(s) a partir de ${totalScanned} partida(s) analisadas.${unmatchedTxt}${failedTxt}`, 'ok');
         showToast(`🎮 ${matched} campeão(ões) sincronizado(s) pelo Riot ID.`);
       }
     }catch(err){
@@ -1377,7 +1426,7 @@
   });
 
   (async function init(){
-    await Promise.all([loadVersion(), loadState(), loadAugmentIndex()]);
+    await Promise.all([loadVersion(), loadState(), loadAugmentIndex(), loadItemIndex()]);
     updateUndoButton();
     render();
   })();
