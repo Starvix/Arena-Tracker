@@ -303,7 +303,7 @@
   .tooltip-box{
     position:absolute; bottom:calc(100% + 14px); left:50%;
     transform:translateX(-50%) translateY(6px);
-    width:max-content; min-width:170px; max-width:230px;
+    width:max-content; min-width:170px; max-width:264px;
     background: var(--panel);
     border:1px solid var(--gold);
     border-radius:10px;
@@ -331,6 +331,21 @@
   .tooltip-box .tt-note{
     font-size:12px; color:var(--muted); margin-top:4px; line-height:1.4; font-style:italic;
     overflow-wrap:break-word; word-break:break-word; white-space:normal;
+  }
+  .tooltip-box .tt-section-label{
+    font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:.08em; text-transform:uppercase;
+    color: var(--muted); margin-top:8px; margin-bottom:4px;
+  }
+  .tooltip-box .tt-icon-row{ display:flex; flex-wrap:wrap; gap:4px; }
+  .tooltip-box .tt-icon{
+    width:26px; height:26px; border-radius:5px;
+    border:1px solid var(--line);
+    background: var(--void);
+    object-fit:cover; flex-shrink:0;
+  }
+  .tooltip-box .tt-icon-fallback{
+    display:flex; align-items:center; justify-content:center;
+    font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--muted);
   }
 
   /* Brilho ao marcar como concluído */
@@ -589,7 +604,6 @@
   </div>
   <div class="toolbar-right">
     <div class="btn primary" id="suggestBtn">🎲 Sugerir um que falta</div>
-    <div class="btn" id="addToggleBtn">+ Campeão novo</div>
   </div>
 </div>
 
@@ -723,6 +737,22 @@
   }
   function imgUrl(id){ return `https://ddragon.leagueoflegends.com/cdn/${ddragonVersion}/img/champion/${id}.png`; }
   function communityDragonUrl(id){ return `https://cdn.communitydragon.org/latest/champion/${id}/square`; }
+  function itemImgUrl(itemId){ return `https://ddragon.leagueoflegends.com/cdn/${ddragonVersion}/img/item/${itemId}.png`; }
+
+  // ---------- Índice de augments da Arena (nome + ícone), carregado uma vez ----------
+  let augmentIndex = {}; // id -> { name, icon }
+  async function loadAugmentIndex(){
+    try{
+      const res = await fetch('https://raw.communitydragon.org/latest/cdragon/arena/en_us.json');
+      const data = await res.json();
+      (data.augments || []).forEach(a => {
+        augmentIndex[a.id] = {
+          name: a.name,
+          icon: `https://raw.communitydragon.org/latest/game/${(a.iconLarge || a.iconSmall || '').toLowerCase()}`
+        };
+      });
+    }catch(e){ /* segue sem nomes/ícones de augment, mostramos só os itens */ }
+  }
 
   // ---------- Camada de armazenamento híbrida ----------
   // Usa window.storage (conta Claude) quando disponível — ex: dentro do preview do Claude.
@@ -925,7 +955,28 @@
     if(status === 'won'){
       const dateTxt = data && data.date ? formatDate(data.date) : '—';
       const noteTxt = data && data.note ? `<div class="tt-note">${escapeHtml(data.note)}</div>` : '';
-      return `<div class="tt-title">Vitória registrada</div><div class="tt-row">🏆 ${dateTxt}</div>${noteTxt}`;
+
+      let augmentsHtml = '';
+      if(data && data.augments && data.augments.length){
+        const chips = data.augments.map(id => {
+          const info = augmentIndex[id];
+          if(info){
+            return `<img class="tt-icon" src="${info.icon}" alt="${escapeHtml(info.name)}" title="${escapeHtml(info.name)}" loading="lazy" onerror="this.style.display='none';">`;
+          }
+          return `<span class="tt-icon tt-icon-fallback" title="Augment #${id}">?</span>`;
+        }).join('');
+        augmentsHtml = `<div class="tt-section-label">Augments</div><div class="tt-icon-row">${chips}</div>`;
+      }
+
+      let itemsHtml = '';
+      if(data && data.items && data.items.length){
+        const chips = data.items.map(id =>
+          `<img class="tt-icon" src="${itemImgUrl(id)}" alt="Item ${id}" loading="lazy" onerror="this.style.display='none';">`
+        ).join('');
+        itemsHtml = `<div class="tt-section-label">Itens</div><div class="tt-icon-row">${chips}</div>`;
+      }
+
+      return `<div class="tt-title">Vitória registrada</div><div class="tt-row">🏆 ${dateTxt}</div>${noteTxt}${augmentsHtml}${itemsHtml}`;
     }
     return `<div class="tt-title">${escapeHtml(c.name)}</div><div class="tt-row">Ainda não vencido na Arena</div>`;
   }
@@ -1267,7 +1318,9 @@
         puuid = data.puuid || puuid;
         totalScanned += data.matchesScanned || 0;
         (data.champions || []).forEach(w => {
-          if(!foundWins[w.id] || foundWins[w.id] > w.date) foundWins[w.id] = w.date;
+          if(!foundWins[w.id] || foundWins[w.id].date > w.date){
+            foundWins[w.id] = { date: w.date, items: w.items || [], augments: w.augments || [] };
+          }
         });
 
         start = data.nextStart;
@@ -1279,13 +1332,18 @@
           const localId = normalizeChampId(riotChampName);
           if(!localId){ unmatched++; return; }
           matched++;
-          const date = foundWins[riotChampName];
+          const { date, items, augments } = foundWins[riotChampName];
           const prev = state.progress[localId];
           if(!prev || prev.status !== 'won'){
-            state.progress[localId] = { status:'won', date, note: prev ? (prev.note||'') : '' };
+            state.progress[localId] = { status:'won', date, note: prev ? (prev.note||'') : '', items, augments };
             addToHistory(localId, nameOf(localId), date);
           } else if(prev.date && date < prev.date){
             prev.date = date; // mantém a data mais antiga de 1º lugar conhecida
+            prev.items = items;
+            prev.augments = augments;
+          } else if(!prev.items || !prev.items.length){
+            prev.items = items; // preenche caso o registro anterior não tivesse esses dados
+            prev.augments = augments;
           }
         });
         saveState();
@@ -1314,7 +1372,7 @@
   });
 
   (async function init(){
-    await Promise.all([loadVersion(), loadState()]);
+    await Promise.all([loadVersion(), loadState(), loadAugmentIndex()]);
     updateUndoButton();
     render();
   })();
