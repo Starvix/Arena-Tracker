@@ -410,6 +410,37 @@
   .modal-box input[type="date"]:focus, .modal-box textarea:focus{ border-color:var(--teal); }
   .modal-actions{ display:flex; justify-content:flex-end; gap:10px; margin-top:20px; }
 
+  .riot-id-label{
+    font-family:'JetBrains Mono',monospace; font-size:10.5px; letter-spacing:.12em; text-transform:uppercase;
+    color: var(--gold); margin: 4px 0 8px;
+  }
+  .riot-id-box{
+    display:flex; align-items:stretch;
+    border:1px solid var(--gold);
+    border-radius:9px;
+    overflow:hidden;
+    background: var(--void);
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .riot-id-box:focus-within{ border-color: var(--teal); box-shadow: 0 0 0 3px rgba(10,200,185,0.14); }
+  .riot-id-box input{
+    flex:1; min-width:0;
+    background:transparent; border:none; color:var(--gold-bright);
+    padding:12px 14px; font-family:'Inter',sans-serif; font-size:14.5px; outline:none;
+  }
+  .riot-id-box input::placeholder{ color: var(--muted); }
+  .riot-id-tag{
+    flex:0 0 auto; width:96px;
+  }
+  .riot-id-divider{
+    flex:0 0 auto;
+    display:flex; align-items:center;
+    padding:0 4px;
+    color: var(--gold);
+    font-family:'JetBrains Mono',monospace; font-size:15px; font-weight:600;
+    border-left:1px solid var(--line);
+  }
+
   .gh-icon{
     width:52px; height:52px; border-radius:50%;
     display:flex; align-items:center; justify-content:center;
@@ -418,21 +449,6 @@
     font-size:22px;
   }
   .gh-explain{ font-size:12.5px; color:var(--muted); line-height:1.55; margin:0 0 4px; }
-  .gh-token-help{ font-size:11.5px; color:var(--muted); margin-top:6px; line-height:1.5; }
-  .gh-token-help a{ color:var(--teal); }
-  .gh-autosync-toggle{
-    display:flex; align-items:center; gap:9px; margin-top:16px;
-    font-size:13px; color:var(--gold-bright); cursor:pointer; user-select:none;
-  }
-  .gh-autosync-toggle input{ accent-color: var(--teal); width:16px; height:16px; cursor:pointer; }
-  .gh-autosync-help{ font-size:11.5px; color:var(--muted); margin:4px 0 0 25px; line-height:1.5; }
-  .autosync-line{ border-color: var(--teal); color: var(--teal); }
-  .gh-advanced-toggle{
-    font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--muted);
-    cursor:pointer; margin-top:14px; width:fit-content; user-select:none;
-  }
-  .gh-advanced-toggle:hover{ color:var(--gold); }
-  .riot-advanced{ margin-top:10px; padding-top:8px; border-top:1px dashed var(--line); }
   .gh-status{ font-family:'JetBrains Mono',monospace; font-size:12px; min-height:18px; margin-top:12px; color:var(--muted); }
   .gh-status.ok{ color:var(--teal); }
   .gh-status.err{ color:var(--ember); }
@@ -474,11 +490,10 @@
 
 <header>
   <div class="brand">
-    <div class="eyebrow">Modo Arena · Registro Pessoal</div>
+    <div class="eyebrow">Modo Arena</div>
     <h1>Cri<span>sol</span></h1>
-    <div class="subtitle">Um codex de Arena, estilo Pokédex: cada campeão começa em silhueta e só ganha cor de verdade depois da sua primeira vitória. Clique para alternar o status.</div>
+    <div class="subtitle">Acompanhe com quais campeões você já conquistou o 1º lugar na Arena.</div>
     <div class="storage-badge" id="storageBadge">Verificando armazenamento…</div>
-    <div class="storage-badge autosync-line" id="autoSyncLine" style="display:none;"></div>
   </div>
 
   <div class="crystal-wrap">
@@ -531,45 +546,6 @@
   </div>
 </div>
 
-<div class="modal-overlay" id="githubModal">
-  <div class="modal-box">
-    <div class="modal-head">
-      <div class="gh-icon">☁</div>
-      <div>
-        <div class="modal-eyebrow">Sua nuvem pessoal</div>
-        <div class="modal-name">Sincronizar com GitHub</div>
-      </div>
-    </div>
-    <p class="gh-explain">
-      Seu progresso é salvo em um <b>Gist privado</b> na sua própria conta do GitHub — só você tem acesso.
-      O token fica guardado apenas neste navegador e é usado só para falar direto com a API do GitHub.
-    </p>
-    <label class="modal-label" for="ghToken">Token de acesso pessoal (escopo <code>gist</code>)</label>
-    <input type="password" id="ghToken" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off">
-    <div class="gh-token-help">
-      Não tem um? <a href="https://github.com/settings/tokens/new?description=Crisol%20Arena%20Tracker&scopes=gist" target="_blank" rel="noopener">Crie um aqui</a> marcando apenas a permissão <b>gist</b> e clique em "Generate token".
-    </div>
-    <label class="modal-label" for="ghGistId">ID do Gist (deixe em branco na primeira vez)</label>
-    <input type="text" id="ghGistId" placeholder="preenchido automaticamente após salvar">
-
-    <label class="gh-autosync-toggle">
-      <input type="checkbox" id="ghAutoSyncToggle">
-      <span>🔁 Sincronizar automaticamente a cada alteração</span>
-    </label>
-    <div class="gh-autosync-help">Com isso ativado, cada vitória, nota ou mudança de status é enviada ao GitHub sozinha (com um pequeno atraso), sem precisar clicar em "Salvar".</div>
-
-    <div class="gh-status" id="ghStatus"></div>
-    <div class="modal-actions gh-actions">
-      <div class="btn danger" id="ghDisconnect">Desconectar</div>
-      <div class="btn" id="ghLoad">⬇ Carregar do GitHub</div>
-      <div class="btn primary" id="ghSave">☁ Salvar no GitHub</div>
-    </div>
-    <div class="modal-actions" style="margin-top:8px;">
-      <div class="btn" id="ghClose">Fechar</div>
-    </div>
-  </div>
-</div>
-
 <div class="modal-overlay" id="riotModal">
   <div class="modal-box">
     <div class="modal-head">
@@ -583,21 +559,11 @@
       Busca seu histórico de Arena direto na Riot e marca sozinho os campeões com quem você já chegou em <b>1º lugar</b>.
     </p>
 
-    <label class="modal-label" for="riotIdInput">Riot ID</label>
-    <input type="text" id="riotIdInput" placeholder="Nick#TAG">
-
-    <div class="gh-advanced-toggle" id="riotAdvancedToggle">⚙ Configurações avançadas</div>
-    <div class="riot-advanced" id="riotAdvancedBox" style="display:none;">
-      <label class="modal-label" for="riotWorkerUrl">URL do Worker</label>
-      <input type="text" id="riotWorkerUrl" placeholder="https://seu-worker.seu-usuario.workers.dev">
-
-      <label class="modal-label" for="riotContinent">Servidor</label>
-      <select id="riotContinent" class="sort-select" style="width:100%;">
-        <option value="americas">Américas (NA, BR, LAN, LAS, OCE)</option>
-        <option value="europe">Europa (EUW, EUNE, TR, RU)</option>
-        <option value="asia">Ásia (KR, JP)</option>
-        <option value="sea">Sudeste Asiático (PH, SG, TH, TW, VN)</option>
-      </select>
+    <div class="riot-id-label">Digite seu Riot ID</div>
+    <div class="riot-id-box">
+      <input type="text" id="riotGameName" placeholder="Nome de Jogo" autocomplete="off">
+      <div class="riot-id-divider">#</div>
+      <input type="text" id="riotTagLine" class="riot-id-tag" placeholder="Tagline" autocomplete="off">
     </div>
 
     <div class="gh-status" id="riotStatus"></div>
@@ -638,7 +604,6 @@
   </div>
   <div class="toolbar-right">
     <button type="button" class="btn" id="undoBtn" disabled>↺ Desfazer</button>
-    <button type="button" class="btn" id="githubBtn">☁ GitHub</button>
     <button type="button" class="btn" id="riotSyncBtn">🎮 Riot ID</button>
     <button type="button" class="btn danger" id="clearAllBtn">🗑 Limpar tudo</button>
   </div>
@@ -851,7 +816,6 @@
     state.meta.updatedAt = Date.now();
     await storageSet(STATE_KEY, JSON.stringify(state));
     updateStorageBadge();
-    if(!suppressAutoPush) scheduleAutoPush();
   }
 
   function allChamps(){
@@ -1061,7 +1025,7 @@
     if(ev.target.id === 'matchModal') closeMatchModal();
   });
   document.addEventListener('keydown', (ev) => {
-    if(ev.key === 'Escape'){ closeMatchModal(); closeGithubModal(); if(!riotSyncRunning) closeRiotModal(); }
+    if(ev.key === 'Escape'){ closeMatchModal(); if(!riotSyncRunning) closeRiotModal(); }
   });
 
   // ---------- Render ----------
@@ -1230,237 +1194,11 @@
     render();
   });
 
-  // ---------- Sincronização com GitHub Gist (nuvem pessoal) ----------
-  const GH_TOKEN_KEY = 'arena_gh_token';
-  const GH_GIST_KEY = 'arena_gh_gistid';
-  const GH_AUTOSYNC_KEY = 'arena_gh_autosync';
-  const GH_FILENAME = 'crisol-arena-progress.json';
-  let autoSyncTimer = null;
-  let suppressAutoPush = false;
-
-  function ghGetToken(){ try{ return localStorage.getItem(GH_TOKEN_KEY) || ''; }catch(e){ return ''; } }
-  function ghGetGistId(){ try{ return localStorage.getItem(GH_GIST_KEY) || ''; }catch(e){ return ''; } }
-  function ghSetCreds(token, gistId){
-    try{
-      if(token) localStorage.setItem(GH_TOKEN_KEY, token); else localStorage.removeItem(GH_TOKEN_KEY);
-      if(gistId) localStorage.setItem(GH_GIST_KEY, gistId); else localStorage.removeItem(GH_GIST_KEY);
-    }catch(e){}
-  }
-  function ghAutoSyncEnabled(){ try{ return localStorage.getItem(GH_AUTOSYNC_KEY) === '1'; }catch(e){ return false; } }
-  function ghSetAutoSync(on){ try{ localStorage.setItem(GH_AUTOSYNC_KEY, on ? '1' : '0'); }catch(e){} }
-
-  function ghSetStatus(msg, kind){
-    const el = document.getElementById('ghStatus');
-    el.textContent = msg;
-    el.className = 'gh-status' + (kind ? ' ' + kind : '');
-  }
-
-  function openGithubModal(){
-    document.getElementById('ghToken').value = ghGetToken();
-    document.getElementById('ghGistId').value = ghGetGistId();
-    document.getElementById('ghAutoSyncToggle').checked = ghAutoSyncEnabled();
-    ghSetStatus('', '');
-    document.getElementById('githubModal').classList.add('show');
-  }
-  function closeGithubModal(){ document.getElementById('githubModal').classList.remove('show'); }
-
-  // ---- Núcleo (headless): usado tanto pelos botões manuais quanto pelo auto-sync ----
-  async function ghApiRequest(token, url, options){
-    if(!token) throw new Error('Token de acesso pessoal ausente.');
-    const res = await fetch(url, Object.assign({
-      headers: Object.assign({
-        'Authorization': 'token ' + token,
-        'Accept': 'application/vnd.github+json'
-      }, (options && options.headers) || {})
-    }, options || {}));
-    if(!res.ok){
-      let detail = '';
-      try{ const j = await res.json(); detail = j.message || ''; }catch(e){}
-      throw new Error(`Erro ${res.status}${detail ? ' — ' + detail : ''}`);
-    }
-    return res.json();
-  }
-
-  async function ghPushCore(token, gistId){
-    const body = {
-      description: 'Crisol — Arena Tracker (LoL) — dados pessoais',
-      public: false,
-      files: { [GH_FILENAME]: { content: JSON.stringify(state, null, 2) } }
-    };
-    let result;
-    if(gistId){
-      result = await ghApiRequest(token, 'https://api.github.com/gists/' + gistId, { method:'PATCH', body: JSON.stringify(body) });
-    } else {
-      result = await ghApiRequest(token, 'https://api.github.com/gists', { method:'POST', body: JSON.stringify(body) });
-    }
-    return result.id;
-  }
-
-  async function ghPullCore(token, gistId){
-    const result = await ghApiRequest(token, 'https://api.github.com/gists/' + gistId, { method:'GET' });
-    const file = result.files && result.files[GH_FILENAME];
-    if(!file){ throw new Error(`Arquivo ${GH_FILENAME} não encontrado nesse Gist.`); }
-    return JSON.parse(file.content);
-  }
-
-  function applyRemoteState(data){
-    state.progress = data.progress || {};
-    state.customChamps = (data.customChamps || []).map(c => ({...c, class: c.class || 'OTHER'}));
-    state.meta = Object.assign({streak:0,lastActiveDate:null,milestonesShown:[],history:[],updatedAt:0}, data.meta || {});
-  }
-
-  // ---- Indicador visual de auto-sync ----
-  function updateAutoSyncIndicator(kind, msg){
-    const modalOpen = document.getElementById('githubModal').classList.contains('show');
-    const timeStr = new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
-    if(kind === 'syncing' && modalOpen) ghSetStatus('Sincronizando…', '');
-    if(kind === 'synced'){
-      if(modalOpen) ghSetStatus('✓ Auto-sync às ' + timeStr, 'ok');
-      const line = document.getElementById('autoSyncLine');
-      if(line){ line.style.display='inline-flex'; line.textContent = '🔁 Auto-sync · última vez às ' + timeStr; }
-    }
-    if(kind === 'error'){
-      if(modalOpen) ghSetStatus('Falha no auto-sync: ' + msg, 'err');
-    }
-  }
-
-  // ---- Auto-sync: envia mudanças automaticamente (com debounce) ----
-  function scheduleAutoPush(){
-    if(!ghAutoSyncEnabled()) return;
-    const token = ghGetToken();
-    if(!token) return;
-    clearTimeout(autoSyncTimer);
-    autoSyncTimer = setTimeout(async () => {
-      updateAutoSyncIndicator('syncing');
-      try{
-        const gistId = ghGetGistId();
-        const newGistId = await ghPushCore(token, gistId);
-        if(newGistId !== gistId){
-          ghSetCreds(token, newGistId);
-          const gEl = document.getElementById('ghGistId');
-          if(gEl) gEl.value = newGistId;
-        }
-        updateAutoSyncIndicator('synced');
-      }catch(err){
-        updateAutoSyncIndicator('error', err.message);
-      }
-    }, 2500);
-  }
-
-  // ---- Auto-sync: ao abrir o app, puxa do GitHub se o remoto for mais novo ----
-  async function ghAutoPullIfNewer(){
-    if(!ghAutoSyncEnabled()) return;
-    const token = ghGetToken(), gistId = ghGetGistId();
-    if(!token || !gistId) return;
-    try{
-      const remote = await ghPullCore(token, gistId);
-      const remoteUpdated = (remote.meta && remote.meta.updatedAt) || 0;
-      const localUpdated = (state.meta && state.meta.updatedAt) || 0;
-      if(remoteUpdated > localUpdated){
-        suppressAutoPush = true;
-        applyRemoteState(remote);
-        await saveState();
-        suppressAutoPush = false;
-        lastAction = null;
-        updateUndoButton();
-        render();
-        showToast('☁ Progresso atualizado a partir do GitHub.');
-      } else if(localUpdated > remoteUpdated){
-        scheduleAutoPush();
-      }
-      updateAutoSyncIndicator('synced');
-    }catch(err){
-      updateAutoSyncIndicator('error', err.message);
-    }
-  }
-
-  // ---- Botões manuais do modal ----
-  async function ghSaveToCloud(){
-    const token = document.getElementById('ghToken').value.trim();
-    if(!token){ ghSetStatus('Cole seu token de acesso pessoal primeiro.', 'err'); return; }
-    let gistId = document.getElementById('ghGistId').value.trim();
-    ghSetStatus('Salvando no GitHub…', '');
-    try{
-      const newGistId = await ghPushCore(token, gistId);
-      document.getElementById('ghGistId').value = newGistId;
-      ghSetCreds(token, newGistId);
-      ghSetStatus('✓ Salvo com sucesso no seu Gist privado.', 'ok');
-      showToast('☁ Progresso salvo no GitHub.');
-    }catch(err){
-      ghSetStatus('Falha ao salvar: ' + err.message, 'err');
-    }
-  }
-
-  async function ghLoadFromCloud(){
-    const token = document.getElementById('ghToken').value.trim();
-    const gistId = document.getElementById('ghGistId').value.trim();
-    if(!token){ ghSetStatus('Cole seu token de acesso pessoal primeiro.', 'err'); return; }
-    if(!gistId){ ghSetStatus('Informe o ID do Gist (ou salve uma vez primeiro para criar um).', 'err'); return; }
-    if(!confirm('Isso vai substituir o progresso salvo neste navegador pelo que estiver no GitHub. Continuar?')) return;
-    ghSetStatus('Carregando do GitHub…', '');
-    try{
-      const data = await ghPullCore(token, gistId);
-      suppressAutoPush = true;
-      applyRemoteState(data);
-      ghSetCreds(token, gistId);
-      await saveState();
-      suppressAutoPush = false;
-      lastAction = null;
-      updateUndoButton();
-      render();
-      ghSetStatus('✓ Progresso carregado do GitHub.', 'ok');
-      showToast('☁ Progresso carregado do GitHub.');
-    }catch(err){
-      suppressAutoPush = false;
-      ghSetStatus('Falha ao carregar: ' + err.message, 'err');
-    }
-  }
-
-  document.getElementById('githubBtn').addEventListener('click', openGithubModal);
-  document.getElementById('ghClose').addEventListener('click', closeGithubModal);
-  document.getElementById('githubModal').addEventListener('click', (ev) => {
-    if(ev.target.id === 'githubModal') closeGithubModal();
-  });
-  document.getElementById('ghSave').addEventListener('click', ghSaveToCloud);
-  document.getElementById('ghLoad').addEventListener('click', ghLoadFromCloud);
-  document.getElementById('ghAutoSyncToggle').addEventListener('change', function(){
-    if(this.checked){
-      const token = document.getElementById('ghToken').value.trim();
-      const gistId = document.getElementById('ghGistId').value.trim();
-      if(!token){
-        ghSetStatus('Cole seu token antes de ativar o auto-sync.', 'err');
-        this.checked = false;
-        return;
-      }
-      ghSetCreds(token, gistId);
-      ghSetAutoSync(true);
-      ghSetStatus('🔁 Auto-sync ativado — toda alteração será enviada ao GitHub sozinha.', 'ok');
-      scheduleAutoPush();
-    } else {
-      ghSetAutoSync(false);
-      ghSetStatus('Auto-sync desativado. Use os botões para sincronizar manualmente.', '');
-      const line = document.getElementById('autoSyncLine');
-      if(line) line.style.display = 'none';
-    }
-  });
-  document.getElementById('ghDisconnect').addEventListener('click', () => {
-    if(!confirm('Isso remove o token salvo neste navegador (o Gist no GitHub não é apagado). Continuar?')) return;
-    ghSetCreds('', '');
-    ghSetAutoSync(false);
-    document.getElementById('ghToken').value = '';
-    document.getElementById('ghGistId').value = '';
-    document.getElementById('ghAutoSyncToggle').checked = false;
-    const line = document.getElementById('autoSyncLine');
-    if(line) line.style.display = 'none';
-    ghSetStatus('Desconectado deste navegador.', '');
-  });
-
   // ---------- Sincronização automática pelo Riot ID (via proxy próprio) ----------
   const DEFAULT_RIOT_WORKER_URL = 'https://arena-tracker.starvix.workers.dev';
   const DEFAULT_RIOT_CONTINENT = 'americas';
-  const RIOT_WORKER_KEY = 'arena_riot_worker_url';
-  const RIOT_ID_KEY = 'arena_riot_id';
-  const RIOT_CONTINENT_KEY = 'arena_riot_continent';
+  const RIOT_GAMENAME_KEY = 'arena_riot_gamename';
+  const RIOT_TAGLINE_KEY = 'arena_riot_tagline';
   const RIOT_MAX_BATCHES = 40; // trava de segurança: até ~40 lotes (centenas de partidas)
   let riotSyncCancelled = false;
   let riotSyncRunning = false;
@@ -1473,14 +1211,12 @@
 
   function openRiotModal(){
     try{
-      document.getElementById('riotWorkerUrl').value = localStorage.getItem(RIOT_WORKER_KEY) || DEFAULT_RIOT_WORKER_URL;
-      document.getElementById('riotIdInput').value = localStorage.getItem(RIOT_ID_KEY) || '';
-      document.getElementById('riotContinent').value = localStorage.getItem(RIOT_CONTINENT_KEY) || DEFAULT_RIOT_CONTINENT;
+      document.getElementById('riotGameName').value = localStorage.getItem(RIOT_GAMENAME_KEY) || '';
+      document.getElementById('riotTagLine').value = localStorage.getItem(RIOT_TAGLINE_KEY) || '';
     }catch(e){}
-    document.getElementById('riotAdvancedBox').style.display = 'none';
     riotSetStatus('', '');
     document.getElementById('riotModal').classList.add('show');
-    document.getElementById('riotIdInput').focus();
+    document.getElementById('riotGameName').focus();
   }
   function closeRiotModal(){
     document.getElementById('riotModal').classList.remove('show');
@@ -1496,22 +1232,16 @@
 
   async function riotSyncStart(){
     if(riotSyncRunning) return;
-    const workerUrl = (document.getElementById('riotWorkerUrl').value.trim() || DEFAULT_RIOT_WORKER_URL).replace(/\/$/, '');
-    const riotIdRaw = document.getElementById('riotIdInput').value.trim();
-    const continent = document.getElementById('riotContinent').value || DEFAULT_RIOT_CONTINENT;
+    const workerUrl = DEFAULT_RIOT_WORKER_URL.replace(/\/$/, '');
+    const continent = DEFAULT_RIOT_CONTINENT;
+    const gameName = document.getElementById('riotGameName').value.trim();
+    const tagLine = document.getElementById('riotTagLine').value.trim().replace(/^#/, '');
 
-    if(!workerUrl){ riotSetStatus('Cole a URL do seu Worker primeiro.', 'err'); return; }
-    if(!riotIdRaw.includes('#')){ riotSetStatus('Informe o Riot ID no formato Nick#TAG.', 'err'); return; }
-
-    const hashIdx = riotIdRaw.lastIndexOf('#');
-    const gameName = riotIdRaw.slice(0, hashIdx).trim();
-    const tagLine = riotIdRaw.slice(hashIdx + 1).trim();
-    if(!gameName || !tagLine){ riotSetStatus('Riot ID inválido. Use o formato Nick#TAG.', 'err'); return; }
+    if(!gameName || !tagLine){ riotSetStatus('Preencha o nome de jogo e a tagline.', 'err'); return; }
 
     try{
-      localStorage.setItem(RIOT_WORKER_KEY, workerUrl);
-      localStorage.setItem(RIOT_ID_KEY, riotIdRaw);
-      localStorage.setItem(RIOT_CONTINENT_KEY, continent);
+      localStorage.setItem(RIOT_GAMENAME_KEY, gameName);
+      localStorage.setItem(RIOT_TAGLINE_KEY, tagLine);
     }catch(e){}
 
     riotSyncRunning = true;
@@ -1578,10 +1308,6 @@
   }
 
   document.getElementById('riotSyncBtn').addEventListener('click', openRiotModal);
-  document.getElementById('riotAdvancedToggle').addEventListener('click', () => {
-    const box = document.getElementById('riotAdvancedBox');
-    box.style.display = box.style.display === 'none' ? 'block' : 'none';
-  });
   document.getElementById('riotClose').addEventListener('click', closeRiotModal);
   document.getElementById('riotModal').addEventListener('click', (ev) => {
     if(ev.target.id === 'riotModal' && !riotSyncRunning) closeRiotModal();
@@ -1595,11 +1321,6 @@
     await Promise.all([loadVersion(), loadState()]);
     updateUndoButton();
     render();
-    if(ghAutoSyncEnabled()){
-      const line = document.getElementById('autoSyncLine');
-      if(line) line.style.display = 'inline-flex';
-      ghAutoPullIfNewer();
-    }
   })();
 })();
 </script>
