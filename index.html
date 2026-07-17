@@ -427,6 +427,12 @@
   .gh-autosync-toggle input{ accent-color: var(--teal); width:16px; height:16px; cursor:pointer; }
   .gh-autosync-help{ font-size:11.5px; color:var(--muted); margin:4px 0 0 25px; line-height:1.5; }
   .autosync-line{ border-color: var(--teal); color: var(--teal); }
+  .gh-advanced-toggle{
+    font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--muted);
+    cursor:pointer; margin-top:14px; width:fit-content; user-select:none;
+  }
+  .gh-advanced-toggle:hover{ color:var(--gold); }
+  .riot-advanced{ margin-top:10px; padding-top:8px; border-top:1px dashed var(--line); }
   .gh-status{ font-family:'JetBrains Mono',monospace; font-size:12px; min-height:18px; margin-top:12px; color:var(--muted); }
   .gh-status.ok{ color:var(--teal); }
   .gh-status.err{ color:var(--ember); }
@@ -575,21 +581,24 @@
     </div>
     <p class="gh-explain">
       Busca seu histórico de Arena direto na Riot e marca sozinho os campeões com quem você já chegou em <b>1º lugar</b>.
-      Requer um pequeno proxy seu (Cloudflare Worker) — veja as instruções no arquivo <code>riot-sync-worker.js</code> que te entreguei.
     </p>
-    <label class="modal-label" for="riotWorkerUrl">URL do seu Worker</label>
-    <input type="text" id="riotWorkerUrl" placeholder="https://seu-worker.seu-usuario.workers.dev">
 
     <label class="modal-label" for="riotIdInput">Riot ID</label>
     <input type="text" id="riotIdInput" placeholder="Nick#TAG">
 
-    <label class="modal-label" for="riotContinent">Servidor</label>
-    <select id="riotContinent" class="sort-select" style="width:100%;">
-      <option value="americas">Américas (NA, BR, LAN, LAS, OCE)</option>
-      <option value="europe">Europa (EUW, EUNE, TR, RU)</option>
-      <option value="asia">Ásia (KR, JP)</option>
-      <option value="sea">Sudeste Asiático (PH, SG, TH, TW, VN)</option>
-    </select>
+    <div class="gh-advanced-toggle" id="riotAdvancedToggle">⚙ Configurações avançadas</div>
+    <div class="riot-advanced" id="riotAdvancedBox" style="display:none;">
+      <label class="modal-label" for="riotWorkerUrl">URL do Worker</label>
+      <input type="text" id="riotWorkerUrl" placeholder="https://seu-worker.seu-usuario.workers.dev">
+
+      <label class="modal-label" for="riotContinent">Servidor</label>
+      <select id="riotContinent" class="sort-select" style="width:100%;">
+        <option value="americas">Américas (NA, BR, LAN, LAS, OCE)</option>
+        <option value="europe">Europa (EUW, EUNE, TR, RU)</option>
+        <option value="asia">Ásia (KR, JP)</option>
+        <option value="sea">Sudeste Asiático (PH, SG, TH, TW, VN)</option>
+      </select>
+    </div>
 
     <div class="gh-status" id="riotStatus"></div>
     <div class="modal-actions gh-actions">
@@ -1447,6 +1456,8 @@
   });
 
   // ---------- Sincronização automática pelo Riot ID (via proxy próprio) ----------
+  const DEFAULT_RIOT_WORKER_URL = 'https://arena-tracker.starvix.workers.dev';
+  const DEFAULT_RIOT_CONTINENT = 'americas';
   const RIOT_WORKER_KEY = 'arena_riot_worker_url';
   const RIOT_ID_KEY = 'arena_riot_id';
   const RIOT_CONTINENT_KEY = 'arena_riot_continent';
@@ -1462,12 +1473,14 @@
 
   function openRiotModal(){
     try{
-      document.getElementById('riotWorkerUrl').value = localStorage.getItem(RIOT_WORKER_KEY) || '';
+      document.getElementById('riotWorkerUrl').value = localStorage.getItem(RIOT_WORKER_KEY) || DEFAULT_RIOT_WORKER_URL;
       document.getElementById('riotIdInput').value = localStorage.getItem(RIOT_ID_KEY) || '';
-      document.getElementById('riotContinent').value = localStorage.getItem(RIOT_CONTINENT_KEY) || 'americas';
+      document.getElementById('riotContinent').value = localStorage.getItem(RIOT_CONTINENT_KEY) || DEFAULT_RIOT_CONTINENT;
     }catch(e){}
+    document.getElementById('riotAdvancedBox').style.display = 'none';
     riotSetStatus('', '');
     document.getElementById('riotModal').classList.add('show');
+    document.getElementById('riotIdInput').focus();
   }
   function closeRiotModal(){
     document.getElementById('riotModal').classList.remove('show');
@@ -1483,9 +1496,9 @@
 
   async function riotSyncStart(){
     if(riotSyncRunning) return;
-    const workerUrl = document.getElementById('riotWorkerUrl').value.trim().replace(/\/$/, '');
+    const workerUrl = (document.getElementById('riotWorkerUrl').value.trim() || DEFAULT_RIOT_WORKER_URL).replace(/\/$/, '');
     const riotIdRaw = document.getElementById('riotIdInput').value.trim();
-    const continent = document.getElementById('riotContinent').value;
+    const continent = document.getElementById('riotContinent').value || DEFAULT_RIOT_CONTINENT;
 
     if(!workerUrl){ riotSetStatus('Cole a URL do seu Worker primeiro.', 'err'); return; }
     if(!riotIdRaw.includes('#')){ riotSetStatus('Informe o Riot ID no formato Nick#TAG.', 'err'); return; }
@@ -1565,6 +1578,10 @@
   }
 
   document.getElementById('riotSyncBtn').addEventListener('click', openRiotModal);
+  document.getElementById('riotAdvancedToggle').addEventListener('click', () => {
+    const box = document.getElementById('riotAdvancedBox');
+    box.style.display = box.style.display === 'none' ? 'block' : 'none';
+  });
   document.getElementById('riotClose').addEventListener('click', closeRiotModal);
   document.getElementById('riotModal').addEventListener('click', (ev) => {
     if(ev.target.id === 'riotModal' && !riotSyncRunning) closeRiotModal();
