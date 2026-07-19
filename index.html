@@ -468,6 +468,12 @@
     font-size:22px;
   }
   .gh-explain{ font-size:12.5px; color:var(--muted); line-height:1.55; margin:0 0 4px; }
+  .gh-autosync-toggle{
+    display:flex; align-items:center; gap:9px; margin-top:16px;
+    font-size:13px; color:var(--gold-bright); cursor:pointer; user-select:none;
+  }
+  .gh-autosync-toggle input{ accent-color: var(--teal); width:16px; height:16px; cursor:pointer; }
+  .gh-token-help{ font-size:11.5px; color:var(--muted); margin-top:6px; line-height:1.5; }
   .gh-status{ font-family:'JetBrains Mono',monospace; font-size:12px; min-height:18px; margin-top:12px; color:var(--muted); }
   .gh-status.ok{ color:var(--teal); }
   .gh-status.err{ color:var(--ember); }
@@ -584,6 +590,12 @@
       <div class="riot-id-divider">#</div>
       <input type="text" id="riotTagLine" class="riot-id-tag" placeholder="Tagline" autocomplete="off">
     </div>
+
+    <label class="gh-autosync-toggle">
+      <input type="checkbox" id="riotFullRescan">
+      <span>🔁 Reler todo o histórico (mais lento — use se algo parecer errado)</span>
+    </label>
+    <div id="riotLastSync" class="gh-token-help" style="display:none;"></div>
 
     <div class="gh-status" id="riotStatus"></div>
     <div class="modal-actions gh-actions">
@@ -1294,6 +1306,7 @@
   const RIOT_GAMENAME_KEY = 'arena_riot_gamename';
   const RIOT_TAGLINE_KEY = 'arena_riot_tagline';
   const RIOT_MAX_BATCHES = 60; // trava de segurança: cobre até ~600 partidas por fila (1700 e 1710)
+  const RIOT_SYNC_OVERLAP_SECONDS = 2 * 24 * 60 * 60; // reconfere os últimos 2 dias por segurança, mesmo em sync incremental
   let riotSyncCancelled = false;
   let riotSyncRunning = false;
 
@@ -1303,11 +1316,42 @@
     el.className = 'gh-status' + (kind ? ' ' + kind : '');
   }
 
+  function riotLastSyncKey(gameName, tagLine){
+    return `arena_riot_lastsync_${gameName.toLowerCase()}#${tagLine.toLowerCase()}`;
+  }
+  function riotGetLastSync(gameName, tagLine){
+    try{
+      const v = localStorage.getItem(riotLastSyncKey(gameName, tagLine));
+      return v ? parseInt(v, 10) : null;
+    }catch(e){ return null; }
+  }
+  function riotSetLastSync(gameName, tagLine, ts){
+    try{ localStorage.setItem(riotLastSyncKey(gameName, tagLine), String(ts)); }catch(e){}
+  }
+
+  function riotUpdateLastSyncNote(){
+    const gameName = document.getElementById('riotGameName').value.trim();
+    const tagLine = document.getElementById('riotTagLine').value.trim().replace(/^#/, '');
+    const note = document.getElementById('riotLastSync');
+    if(!gameName || !tagLine){ note.style.display = 'none'; return; }
+    const last = riotGetLastSync(gameName, tagLine);
+    if(last){
+      const d = new Date(last);
+      note.textContent = `Última sincronização completa: ${d.toLocaleDateString('pt-BR')} às ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} — a próxima vai checar só o que for novo desde então.`;
+      note.style.display = 'block';
+    } else {
+      note.textContent = 'Primeira sincronização deste Riot ID: vai reler o histórico completo (pode levar alguns minutos).';
+      note.style.display = 'block';
+    }
+  }
+
   function openRiotModal(){
     try{
       document.getElementById('riotGameName').value = localStorage.getItem(RIOT_GAMENAME_KEY) || '';
       document.getElementById('riotTagLine').value = localStorage.getItem(RIOT_TAGLINE_KEY) || '';
     }catch(e){}
+    document.getElementById('riotFullRescan').checked = false;
+    riotUpdateLastSyncNote();
     riotSetStatus('', '');
     document.getElementById('riotModal').classList.add('show');
     document.getElementById('riotGameName').focus();
@@ -1342,6 +1386,11 @@
     riotSyncCancelled = false;
     document.getElementById('riotSyncStart').textContent = '⏳ Sincronizando…';
 
+    const forceFullRescan = document.getElementById('riotFullRescan').checked;
+    const lastSyncMs = forceFullRescan ? null : riotGetLastSync(gameName, tagLine);
+    const sinceTs = lastSyncMs ? Math.floor(lastSyncMs / 1000) - RIOT_SYNC_OVERLAP_SECONDS : null;
+    const syncStartedAt = Date.now();
+
     let puuid = null;
     let start1700 = 0;
     let start1710 = 0;
@@ -1356,10 +1405,12 @@
       while(batch < RIOT_MAX_BATCHES){
         if(riotSyncCancelled){ riotSetStatus('Sincronização cancelada.', ''); break; }
         batch++;
-        riotSetStatus(`Lote ${batch} · ${totalScanned} partidas analisadas · ${Object.keys(foundWins).length} vitória(s) encontrada(s)…`, '');
+        const modeTxt = sinceTs ? '⚡ incremental' : '🔎 completa';
+        riotSetStatus(`${modeTxt} · lote ${batch} · ${totalScanned} partidas analisadas · ${Object.keys(foundWins).length} vitória(s) encontrada(s)…`, '');
 
         const params = new URLSearchParams({ continent, start1700: String(start1700), start1710: String(start1710), count: '10' });
         if(puuid){ params.set('puuid', puuid); } else { params.set('gameName', gameName); params.set('tagLine', tagLine); }
+        if(sinceTs) params.set('sinceTs', String(sinceTs));
 
         const res = await fetch(`${workerUrl}/sync-batch?${params.toString()}`);
         const data = await res.json();
@@ -1399,12 +1450,16 @@
           }
         });
         saveState();
+        // Só avança o "checkpoint" de sincronização incremental quando o lote terminou por completo
+        // (não por cancelamento) — assim a próxima sincronização sabe exatamente até onde já foi conferido.
+        riotSetLastSync(gameName, tagLine, syncStartedAt);
         lastAction = null;
         updateUndoButton();
         render();
         const failedTxt = totalFailed ? ` (${totalFailed} partida(s) não puderam ser lidas — tente sincronizar de novo depois)` : '';
         const unmatchedTxt = unmatched ? ` (${unmatched} não reconhecido(s): ${unmatchedNames.join(', ')})` : '';
-        riotSetStatus(`✓ Sincronizado! ${matched} campeão(ões) marcado(s) como vencido(s) a partir de ${totalScanned} partida(s) analisadas.${unmatchedTxt}${failedTxt}`, 'ok');
+        const modeTxt = sinceTs ? ' (sincronização rápida — só partidas novas)' : '';
+        riotSetStatus(`✓ Sincronizado!${modeTxt} ${matched} campeão(ões) marcado(s) como vencido(s) a partir de ${totalScanned} partida(s) analisadas.${unmatchedTxt}${failedTxt}`, 'ok');
         showToast(`🎮 ${matched} campeão(ões) sincronizado(s) pelo Riot ID.`);
       }
     }catch(err){
@@ -1416,6 +1471,8 @@
   }
 
   document.getElementById('riotSyncBtn').addEventListener('click', openRiotModal);
+  document.getElementById('riotGameName').addEventListener('input', riotUpdateLastSyncNote);
+  document.getElementById('riotTagLine').addEventListener('input', riotUpdateLastSyncNote);
   document.getElementById('riotClose').addEventListener('click', closeRiotModal);
   document.getElementById('riotModal').addEventListener('click', (ev) => {
     if(ev.target.id === 'riotModal' && !riotSyncRunning) closeRiotModal();
