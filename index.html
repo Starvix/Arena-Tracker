@@ -110,6 +110,17 @@
     display:flex; gap:14px; flex-wrap:wrap; align-items:center;
   }
   .history-chips{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .most-played{
+    display:flex; align-items:center; gap:8px;
+    background: rgba(200,170,110,0.08);
+    border:1px solid var(--gold);
+    border-radius:20px;
+    padding:5px 12px 5px 6px;
+    font-size:12.5px;
+  }
+  .most-played img{ width:22px; height:22px; border-radius:50%; object-fit:cover; }
+  .most-played b{ color:var(--gold); }
+  .most-played .mp-label{ color:var(--muted); font-family:'JetBrains Mono',monospace; font-size:10.5px; letter-spacing:.04em; text-transform:uppercase; margin-right:2px; }
   .history-label{ font-size:11px; color:var(--muted); font-family:'JetBrains Mono',monospace; letter-spacing:.05em; text-transform:uppercase; margin-right:4px; }
   .history-chip{
     display:flex; align-items:center; gap:6px;
@@ -330,6 +341,7 @@
   }
   .champ.state-none .tooltip-box .tt-title{ color: var(--gold); }
   .tooltip-box .tt-row{ font-size:13px; color:var(--gold-bright); line-height:1.4; }
+  .tooltip-box .tt-games{ font-size:12px; color:var(--muted); }
   .tooltip-box .tt-note{
     font-size:12px; color:var(--muted); margin-top:4px; line-height:1.4; font-style:italic;
     overflow-wrap:break-word; word-break:break-word; white-space:normal;
@@ -545,6 +557,7 @@
 </div>
 
 <div class="stats-strip">
+  <div class="most-played" id="mostPlayed" style="display:none;"></div>
   <div class="history-chips" id="historyChips">
     <span class="history-label">Últimas conquistas</span>
     <span class="history-empty">Nenhuma vitória registrada ainda.</span>
@@ -576,20 +589,13 @@
     <div class="modal-head">
       <div class="gh-icon">🎮</div>
       <div>
-        <div class="modal-eyebrow">Sincronização automática</div>
-        <div class="modal-name">Sincronizar pelo Riot ID</div>
+        <div class="modal-eyebrow">Desafio pessoal</div>
+        <div class="modal-name">Lucario <span style="color:var(--muted);">#dani</span></div>
       </div>
     </div>
     <p class="gh-explain">
-      Busca seu histórico de Arena direto na Riot e marca sozinho os campeões com quem você já chegou em <b>1º lugar</b>.
+      Busca seu histórico de Arena direto na Riot: marca campeões vencidos (1º lugar) e conta quantas partidas você já jogou com cada um.
     </p>
-
-    <div class="riot-id-label">Digite seu Riot ID</div>
-    <div class="riot-id-box">
-      <input type="text" id="riotGameName" placeholder="Nome de Jogo" autocomplete="off">
-      <div class="riot-id-divider">#</div>
-      <input type="text" id="riotTagLine" class="riot-id-tag" placeholder="Tagline" autocomplete="off">
-    </div>
 
     <label class="gh-autosync-toggle">
       <input type="checkbox" id="riotFullRescan">
@@ -731,7 +737,7 @@
   const OLD_CUSTOM_KEY = 'arena_custom_champs_v1';
 
   let ddragonVersion = '15.1.1';
-  let state = { progress:{}, customChamps:[], meta:{ streak:0, lastActiveDate:null, milestonesShown:[], history:[] } };
+  let state = { progress:{}, customChamps:[], playCounts:{}, meta:{ streak:0, lastActiveDate:null, milestonesShown:[], history:[] } };
   let currentFilter = 'all';
   let searchTerm = '';
   let groupByClass = false;
@@ -867,6 +873,7 @@
         const parsed = JSON.parse(raw);
         state.progress = parsed.progress || {};
         state.customChamps = parsed.customChamps || [];
+        state.playCounts = parsed.playCounts || {};
         state.meta = Object.assign({streak:0,lastActiveDate:null,milestonesShown:[],history:[]}, parsed.meta || {});
         updateStorageBadge();
         return;
@@ -1035,9 +1042,14 @@
         itemsHtml = `<div class="tt-section-label">Itens</div><div class="tt-icon-row">${chips}</div>`;
       }
 
-      return `<div class="tt-title">Vitória registrada</div><div class="tt-row">🏆 ${dateTxt}</div>${noteTxt}${augmentsHtml}${itemsHtml}`;
+      const gamesN = state.playCounts[c.id] || 0;
+      const gamesTxt = gamesN ? `<div class="tt-row tt-games">🎮 ${gamesN} partida(s) jogada(s)</div>` : '';
+
+      return `<div class="tt-title">Vitória registrada</div><div class="tt-row">🏆 ${dateTxt}</div>${noteTxt}${gamesTxt}${augmentsHtml}${itemsHtml}`;
     }
-    return `<div class="tt-title">${escapeHtml(c.name)}</div><div class="tt-row">Ainda não vencido na Arena</div>`;
+    const gamesN = state.playCounts[c.id] || 0;
+    const gamesTxt = gamesN ? `<div class="tt-row tt-games">🎮 ${gamesN} partida(s) jogada(s)</div>` : '';
+    return `<div class="tt-title">${escapeHtml(c.name)}</div><div class="tt-row">Ainda não vencido na Arena</div>${gamesTxt}`;
   }
 
   // ---------- Card builder ----------
@@ -1162,6 +1174,18 @@
     `).join('');
   }
 
+  function updateMostPlayed(){
+    const el = document.getElementById('mostPlayed');
+    const entries = Object.entries(state.playCounts || {});
+    if(!entries.length){ el.style.display = 'none'; return; }
+    entries.sort((a,b) => b[1] - a[1]);
+    const [topId, topCount] = entries[0];
+    const champ = allChamps().find(c => c.id === topId);
+    const name = champ ? champ.name : topId;
+    el.innerHTML = `<span class="mp-label">Mais jogado</span><img src="${imgUrl(topId)}" alt="" referrerpolicy="no-referrer" onerror="this.src='${communityDragonUrl(topId)}';this.onerror=null;"><b>${escapeHtml(name)}</b> · ${topCount} partida(s)`;
+    el.style.display = 'flex';
+  }
+
   function sortChamps(list){
     const arr = [...list];
     if(sortMode === 'status'){
@@ -1213,6 +1237,7 @@
 
     updateCrystal();
     updateHistoryUI();
+    updateMostPlayed();
   }
 
   // ---------- Controls wiring ----------
@@ -1291,8 +1316,9 @@
   document.getElementById('undoBtn').addEventListener('click', undo);
 
   document.getElementById('clearAllBtn').addEventListener('click', () => {
-    if(!confirm('Isso vai apagar todo o seu progresso salvo (vitórias, notas, histórico e sequência). Deseja continuar?')) return;
+    if(!confirm('Isso vai apagar todo o seu progresso salvo (vitórias, notas, histórico, sequência e partidas contadas). Deseja continuar?')) return;
     state.progress = {};
+    state.playCounts = {};
     state.meta = { streak:0, lastActiveDate:null, milestonesShown:[], history:[] };
     lastAction = null;
     saveState();
@@ -1300,13 +1326,16 @@
     render();
   });
 
-  // ---------- Sincronização automática pelo Riot ID (via proxy próprio) ----------
+  // ---------- Sincronização automática — perfil pessoal fixo ----------
   const DEFAULT_RIOT_WORKER_URL = 'https://arena-tracker.starvix.workers.dev';
-  const DEFAULT_RIOT_CONTINENT = 'americas';
-  const RIOT_GAMENAME_KEY = 'arena_riot_gamename';
-  const RIOT_TAGLINE_KEY = 'arena_riot_tagline';
+  const DEFAULT_RIOT_CONTINENT = 'americas'; // roteamento da Riot para o servidor Brasil
+  const MY_RIOT_GAMENAME = 'Lucario';
+  const MY_RIOT_TAGLINE = 'dani';
   const RIOT_MAX_BATCHES = 60; // trava de segurança: cobre até ~600 partidas por fila (1700 e 1710)
   const RIOT_SYNC_OVERLAP_SECONDS = 2 * 24 * 60 * 60; // reconfere os últimos 2 dias por segurança, mesmo em sync incremental
+  const RIOT_SYNC_SCHEMA_VERSION = 2; // suba este número sempre que a lógica de busca mudar de forma relevante —
+                                        // isso invalida checkpoints antigos automaticamente, evitando sincronizações
+                                        // incrementais "presas" numa versão anterior com bugs já corrigidos
   let riotSyncCancelled = false;
   let riotSyncRunning = false;
 
@@ -1316,45 +1345,37 @@
     el.className = 'gh-status' + (kind ? ' ' + kind : '');
   }
 
-  function riotLastSyncKey(gameName, tagLine){
-    return `arena_riot_lastsync_${gameName.toLowerCase()}#${tagLine.toLowerCase()}`;
+  function riotLastSyncKey(){
+    return `arena_riot_lastsync_v${RIOT_SYNC_SCHEMA_VERSION}_${MY_RIOT_GAMENAME.toLowerCase()}#${MY_RIOT_TAGLINE.toLowerCase()}`;
   }
-  function riotGetLastSync(gameName, tagLine){
+  function riotGetLastSync(){
     try{
-      const v = localStorage.getItem(riotLastSyncKey(gameName, tagLine));
+      const v = localStorage.getItem(riotLastSyncKey());
       return v ? parseInt(v, 10) : null;
     }catch(e){ return null; }
   }
-  function riotSetLastSync(gameName, tagLine, ts){
-    try{ localStorage.setItem(riotLastSyncKey(gameName, tagLine), String(ts)); }catch(e){}
+  function riotSetLastSync(ts){
+    try{ localStorage.setItem(riotLastSyncKey(), String(ts)); }catch(e){}
   }
 
   function riotUpdateLastSyncNote(){
-    const gameName = document.getElementById('riotGameName').value.trim();
-    const tagLine = document.getElementById('riotTagLine').value.trim().replace(/^#/, '');
     const note = document.getElementById('riotLastSync');
-    if(!gameName || !tagLine){ note.style.display = 'none'; return; }
-    const last = riotGetLastSync(gameName, tagLine);
+    const last = riotGetLastSync();
     if(last){
       const d = new Date(last);
       note.textContent = `Última sincronização completa: ${d.toLocaleDateString('pt-BR')} às ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} — a próxima vai checar só o que for novo desde então.`;
       note.style.display = 'block';
     } else {
-      note.textContent = 'Primeira sincronização deste Riot ID: vai reler o histórico completo (pode levar alguns minutos).';
+      note.textContent = 'Primeira sincronização: vai reler o histórico completo (pode levar alguns minutos).';
       note.style.display = 'block';
     }
   }
 
   function openRiotModal(){
-    try{
-      document.getElementById('riotGameName').value = localStorage.getItem(RIOT_GAMENAME_KEY) || '';
-      document.getElementById('riotTagLine').value = localStorage.getItem(RIOT_TAGLINE_KEY) || '';
-    }catch(e){}
     document.getElementById('riotFullRescan').checked = false;
     riotUpdateLastSyncNote();
     riotSetStatus('', '');
     document.getElementById('riotModal').classList.add('show');
-    document.getElementById('riotGameName').focus();
   }
   function closeRiotModal(){
     document.getElementById('riotModal').classList.remove('show');
@@ -1372,22 +1393,15 @@
     if(riotSyncRunning) return;
     const workerUrl = DEFAULT_RIOT_WORKER_URL.replace(/\/$/, '');
     const continent = DEFAULT_RIOT_CONTINENT;
-    const gameName = document.getElementById('riotGameName').value.trim();
-    const tagLine = document.getElementById('riotTagLine').value.trim().replace(/^#/, '');
-
-    if(!gameName || !tagLine){ riotSetStatus('Preencha o nome de jogo e a tagline.', 'err'); return; }
-
-    try{
-      localStorage.setItem(RIOT_GAMENAME_KEY, gameName);
-      localStorage.setItem(RIOT_TAGLINE_KEY, tagLine);
-    }catch(e){}
+    const gameName = MY_RIOT_GAMENAME;
+    const tagLine = MY_RIOT_TAGLINE;
 
     riotSyncRunning = true;
     riotSyncCancelled = false;
     document.getElementById('riotSyncStart').textContent = '⏳ Sincronizando…';
 
     const forceFullRescan = document.getElementById('riotFullRescan').checked;
-    const lastSyncMs = forceFullRescan ? null : riotGetLastSync(gameName, tagLine);
+    const lastSyncMs = forceFullRescan ? null : riotGetLastSync();
     const sinceTs = lastSyncMs ? Math.floor(lastSyncMs / 1000) - RIOT_SYNC_OVERLAP_SECONDS : null;
     const syncStartedAt = Date.now();
 
@@ -1398,6 +1412,7 @@
     let totalScanned = 0;
     let totalFailed = 0;
     const foundWins = {}; // championName (Riot) -> data ISO
+    const foundPlayCounts = {}; // championName (Riot) -> partidas jogadas nesta sincronização
     let matched = 0, unmatched = 0;
     const unmatchedNames = [];
 
@@ -1424,6 +1439,9 @@
             foundWins[w.id] = { date: w.date, items: w.items || [], augments: w.augments || [] };
           }
         });
+        Object.entries(data.playCounts || {}).forEach(([champName, n]) => {
+          foundPlayCounts[champName] = (foundPlayCounts[champName] || 0) + n;
+        });
 
         start1700 = data.nextStart1700 ?? start1700;
         start1710 = data.nextStart1710 ?? start1710;
@@ -1449,18 +1467,24 @@
             prev.augments = augments;
           }
         });
+        Object.entries(foundPlayCounts).forEach(([riotChampName, n]) => {
+          const localId = normalizeChampId(riotChampName);
+          if(!localId) return;
+          state.playCounts[localId] = (state.playCounts[localId] || 0) + n;
+        });
         saveState();
         // Só avança o "checkpoint" de sincronização incremental quando o lote terminou por completo
         // (não por cancelamento) — assim a próxima sincronização sabe exatamente até onde já foi conferido.
-        riotSetLastSync(gameName, tagLine, syncStartedAt);
+        riotSetLastSync(syncStartedAt);
         lastAction = null;
         updateUndoButton();
         render();
         const failedTxt = totalFailed ? ` (${totalFailed} partida(s) não puderam ser lidas — tente sincronizar de novo depois)` : '';
         const unmatchedTxt = unmatched ? ` (${unmatched} não reconhecido(s): ${unmatchedNames.join(', ')})` : '';
         const modeTxt = sinceTs ? ' (sincronização rápida — só partidas novas)' : '';
-        riotSetStatus(`✓ Sincronizado!${modeTxt} ${matched} campeão(ões) marcado(s) como vencido(s) a partir de ${totalScanned} partida(s) analisadas.${unmatchedTxt}${failedTxt}`, 'ok');
-        showToast(`🎮 ${matched} campeão(ões) sincronizado(s) pelo Riot ID.`);
+        const totalGamesFound = Object.values(foundPlayCounts).reduce((a,b) => a+b, 0);
+        riotSetStatus(`✓ Sincronizado!${modeTxt} ${matched} vitória(s) nova(s) · ${totalGamesFound} partida(s) nova(s) contabilizada(s) de ${totalScanned} analisadas.${unmatchedTxt}${failedTxt}`, 'ok');
+        showToast(`🎮 Sincronizado: ${matched} campeão(ões) vencido(s), ${totalGamesFound} partida(s) nova(s).`);
       }
     }catch(err){
       riotSetStatus('Falha na sincronização: ' + err.message, 'err');
@@ -1471,8 +1495,6 @@
   }
 
   document.getElementById('riotSyncBtn').addEventListener('click', openRiotModal);
-  document.getElementById('riotGameName').addEventListener('input', riotUpdateLastSyncNote);
-  document.getElementById('riotTagLine').addEventListener('input', riotUpdateLastSyncNote);
   document.getElementById('riotClose').addEventListener('click', closeRiotModal);
   document.getElementById('riotModal').addEventListener('click', (ev) => {
     if(ev.target.id === 'riotModal' && !riotSyncRunning) closeRiotModal();
