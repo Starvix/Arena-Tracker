@@ -441,6 +441,41 @@
   .modal-box input[type="date"]:focus, .modal-box textarea:focus{ border-color:var(--teal); }
   .modal-actions{ display:flex; justify-content:flex-end; gap:10px; margin-top:20px; }
 
+  .ach-box{ width:min(560px, 100%); max-height:82vh; overflow-y:auto; }
+  .ach-summary{
+    font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--teal);
+    letter-spacing:.04em; margin-bottom:16px;
+  }
+  .ach-group{ margin-bottom:20px; }
+  .ach-group-title{
+    font-family:'Cinzel',serif; font-size:15px; color:var(--gold-bright);
+    margin-bottom:10px; padding-bottom:6px; border-bottom:1px solid var(--line);
+  }
+  .ach-grid{
+    display:grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap:10px;
+  }
+  .ach-item{
+    display:flex; flex-direction:column; align-items:center; gap:4px;
+    text-align:center;
+    padding:14px 10px;
+    border-radius:10px;
+    border:1px solid var(--line);
+    background: var(--void);
+    opacity:.55;
+    transition: opacity .15s, border-color .15s, transform .15s;
+  }
+  .ach-item.unlocked{
+    opacity:1;
+    border-color: var(--gold);
+    background: linear-gradient(160deg, rgba(200,170,110,0.12), rgba(200,170,110,0.02));
+    box-shadow: 0 0 14px rgba(200,170,110,0.15);
+  }
+  .ach-item .ach-icon{ font-size:24px; }
+  .ach-item .ach-name{ font-size:12px; color:var(--gold-bright); line-height:1.3; }
+  .ach-item.unlocked .ach-name{ color:var(--gold); font-weight:600; }
+  .ach-item .ach-progress{ font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--muted); }
+
   .riot-id-label{
     font-family:'JetBrains Mono',monospace; font-size:10.5px; letter-spacing:.12em; text-transform:uppercase;
     color: var(--gold); margin: 4px 0 8px;
@@ -614,6 +649,22 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="achievementsModal">
+  <div class="modal-box ach-box">
+    <div class="modal-head">
+      <div class="gh-icon">🏅</div>
+      <div>
+        <div class="modal-eyebrow">Desafio pessoal</div>
+        <div class="modal-name">Conquistas</div>
+      </div>
+    </div>
+    <div class="ach-groups" id="achGroups"></div>
+    <div class="modal-actions" style="margin-top:16px;">
+      <div class="btn" id="achClose">Fechar</div>
+    </div>
+  </div>
+</div>
+
 <div class="controls">
   <div class="search-box">
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -641,6 +692,7 @@
   </div>
   <div class="toolbar-right">
     <button type="button" class="btn" id="undoBtn" disabled>↺ Desfazer</button>
+    <button type="button" class="btn" id="achievementsBtn">🏅 Conquistas</button>
     <button type="button" class="btn" id="riotSyncBtn">🎮 Riot ID</button>
     <button type="button" class="btn danger" id="clearAllBtn">🗑 Limpar tudo</button>
   </div>
@@ -954,6 +1006,59 @@
     });
   }
 
+  // ---------- Aba de conquistas (marcos + classes completas) ----------
+  const MILESTONE_LEVELS = [10, 25, 50, 75, 100, 130, 150];
+
+  function renderAchievements(){
+    const box = document.getElementById('achGroups');
+    const champs = allChamps();
+    const total = champs.length;
+    const wonCount = champs.filter(c => getStatus(c.id) === 'won').length;
+
+    const levels = [...new Set(MILESTONE_LEVELS.filter(n => n <= total).concat([total]))].sort((a,b) => a-b);
+    const milestoneHtml = levels.map(n => {
+      const unlocked = wonCount >= n;
+      return `
+        <div class="ach-item ${unlocked ? 'unlocked' : ''}">
+          <div class="ach-icon">${unlocked ? '🏆' : '🔒'}</div>
+          <div class="ach-name">${n} campe${n===1?'ão':'ões'} vencido${n===1?'':'s'}</div>
+          <div class="ach-progress">${Math.min(wonCount, n)}/${n}</div>
+        </div>`;
+    }).join('');
+
+    const classHtml = CLASS_ORDER.filter(cls => cls !== 'OTHER').map(cls => {
+      const inClass = champs.filter(c => c.class === cls);
+      const wonInClass = inClass.filter(c => getStatus(c.id) === 'won').length;
+      const unlocked = inClass.length > 0 && wonInClass === inClass.length;
+      return `
+        <div class="ach-item ${unlocked ? 'unlocked' : ''}">
+          <div class="ach-icon">${unlocked ? '🏆' : '🔒'}</div>
+          <div class="ach-name">Todos os ${escapeHtml(CLASS_LABELS[cls])}</div>
+          <div class="ach-progress">${wonInClass}/${inClass.length}</div>
+        </div>`;
+    }).join('');
+
+    const totalAchievements = levels.length + (CLASS_ORDER.length - 1);
+    const unlockedAchievements =
+      levels.filter(n => wonCount >= n).length +
+      CLASS_ORDER.filter(cls => cls !== 'OTHER').filter(cls => {
+        const inClass = champs.filter(c => c.class === cls);
+        return inClass.length > 0 && inClass.every(c => getStatus(c.id) === 'won');
+      }).length;
+
+    box.innerHTML = `
+      <div class="ach-summary">${unlockedAchievements}/${totalAchievements} conquistas desbloqueadas</div>
+      <div class="ach-group">
+        <div class="ach-group-title">Marcos de vitórias</div>
+        <div class="ach-grid">${milestoneHtml}</div>
+      </div>
+      <div class="ach-group">
+        <div class="ach-group-title">Classes completas</div>
+        <div class="ach-grid">${classHtml}</div>
+      </div>
+    `;
+  }
+
   // ---------- History ----------
   function addToHistory(id, name, date){
     state.meta.history = state.meta.history.filter(h => h.id !== id);
@@ -1143,7 +1248,7 @@
     if(ev.target.id === 'matchModal') closeMatchModal();
   });
   document.addEventListener('keydown', (ev) => {
-    if(ev.key === 'Escape'){ closeMatchModal(); if(!riotSyncRunning) closeRiotModal(); }
+    if(ev.key === 'Escape'){ closeMatchModal(); if(!riotSyncRunning) closeRiotModal(); document.getElementById('achievementsModal').classList.remove('show'); }
   });
 
   // ---------- Render ----------
@@ -1331,9 +1436,9 @@
   const DEFAULT_RIOT_CONTINENT = 'americas'; // roteamento da Riot para o servidor Brasil
   const MY_RIOT_GAMENAME = 'Lucario';
   const MY_RIOT_TAGLINE = 'dani';
-  const RIOT_MAX_BATCHES = 60; // trava de segurança: cobre até ~600 partidas por fila (1700 e 1710)
+  const RIOT_MAX_BATCHES = 100; // trava de segurança: cobre até ~800 partidas por fila de Arena conhecida
   const RIOT_SYNC_OVERLAP_SECONDS = 2 * 24 * 60 * 60; // reconfere os últimos 2 dias por segurança, mesmo em sync incremental
-  const RIOT_SYNC_SCHEMA_VERSION = 2; // suba este número sempre que a lógica de busca mudar de forma relevante —
+  const RIOT_SYNC_SCHEMA_VERSION = 3; // suba este número sempre que a lógica de busca mudar de forma relevante —
                                         // isso invalida checkpoints antigos automaticamente, evitando sincronizações
                                         // incrementais "presas" numa versão anterior com bugs já corrigidos
   let riotSyncCancelled = false;
@@ -1389,6 +1494,8 @@
     return found ? found.id : null;
   }
 
+  const REQUIRED_WORKER_VERSION = 3; // deve bater com WORKER_VERSION no riot-sync-worker.js
+
   async function riotSyncStart(){
     if(riotSyncRunning) return;
     const workerUrl = DEFAULT_RIOT_WORKER_URL.replace(/\/$/, '');
@@ -1398,16 +1505,35 @@
 
     riotSyncRunning = true;
     riotSyncCancelled = false;
-    document.getElementById('riotSyncStart').textContent = '⏳ Sincronizando…';
+    document.getElementById('riotSyncStart').textContent = '⏳ Verificando o Worker…';
 
+    // Confere ANTES de sincronizar se o Worker publicado é a versão esperada.
+    // Isso existe porque um Worker desatualizado ainda responde normalmente (sem erro),
+    // só que com dados incompletos — o que já causou contagens erradas silenciosas antes.
+    try{
+      const verRes = await fetch(`${workerUrl}/version`);
+      const verData = await verRes.json();
+      if(!verRes.ok || !verData.workerVersion || verData.workerVersion < REQUIRED_WORKER_VERSION){
+        riotSetStatus(`⚠ O Worker publicado está desatualizado (versão ${verData.workerVersion ?? 'desconhecida'}, esperado ${REQUIRED_WORKER_VERSION}+). Refaça o deploy do riot-sync-worker.js mais recente antes de sincronizar — senão a contagem sai errada.`, 'err');
+        riotSyncRunning = false;
+        document.getElementById('riotSyncStart').textContent = '🎮 Sincronizar agora';
+        return;
+      }
+    }catch(e){
+      riotSetStatus('⚠ Não consegui falar com o Worker (offline ou URL errada). Confira se ele está publicado.', 'err');
+      riotSyncRunning = false;
+      document.getElementById('riotSyncStart').textContent = '🎮 Sincronizar agora';
+      return;
+    }
+
+    document.getElementById('riotSyncStart').textContent = '⏳ Sincronizando…';
     const forceFullRescan = document.getElementById('riotFullRescan').checked;
     const lastSyncMs = forceFullRescan ? null : riotGetLastSync();
     const sinceTs = lastSyncMs ? Math.floor(lastSyncMs / 1000) - RIOT_SYNC_OVERLAP_SECONDS : null;
     const syncStartedAt = Date.now();
 
     let puuid = null;
-    let start1700 = 0;
-    let start1710 = 0;
+    let cursors = {};
     let batch = 0;
     let totalScanned = 0;
     let totalFailed = 0;
@@ -1423,7 +1549,7 @@
         const modeTxt = sinceTs ? '⚡ incremental' : '🔎 completa';
         riotSetStatus(`${modeTxt} · lote ${batch} · ${totalScanned} partidas analisadas · ${Object.keys(foundWins).length} vitória(s) encontrada(s)…`, '');
 
-        const params = new URLSearchParams({ continent, start1700: String(start1700), start1710: String(start1710), count: '10' });
+        const params = new URLSearchParams({ continent, cursors: JSON.stringify(cursors), count: '8' });
         if(puuid){ params.set('puuid', puuid); } else { params.set('gameName', gameName); params.set('tagLine', tagLine); }
         if(sinceTs) params.set('sinceTs', String(sinceTs));
 
@@ -1443,8 +1569,7 @@
           foundPlayCounts[champName] = (foundPlayCounts[champName] || 0) + n;
         });
 
-        start1700 = data.nextStart1700 ?? start1700;
-        start1710 = data.nextStart1710 ?? start1710;
+        cursors = data.cursors || cursors;
         if(!data.hasMore || !data.matchesInBatch){ break; }
       }
 
@@ -1495,6 +1620,16 @@
   }
 
   document.getElementById('riotSyncBtn').addEventListener('click', openRiotModal);
+  document.getElementById('achievementsBtn').addEventListener('click', () => {
+    renderAchievements();
+    document.getElementById('achievementsModal').classList.add('show');
+  });
+  document.getElementById('achClose').addEventListener('click', () => {
+    document.getElementById('achievementsModal').classList.remove('show');
+  });
+  document.getElementById('achievementsModal').addEventListener('click', (ev) => {
+    if(ev.target.id === 'achievementsModal') document.getElementById('achievementsModal').classList.remove('show');
+  });
   document.getElementById('riotClose').addEventListener('click', closeRiotModal);
   document.getElementById('riotModal').addEventListener('click', (ev) => {
     if(ev.target.id === 'riotModal' && !riotSyncRunning) closeRiotModal();
