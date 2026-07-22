@@ -1436,9 +1436,9 @@
   const DEFAULT_RIOT_CONTINENT = 'americas'; // roteamento da Riot para o servidor Brasil
   const MY_RIOT_GAMENAME = 'Lucario';
   const MY_RIOT_TAGLINE = 'dani';
-  const RIOT_MAX_BATCHES = 100; // trava de segurança: cobre até ~800 partidas por fila de Arena conhecida
+  const RIOT_MAX_BATCHES = 160; // trava de segurança generosa — cobre até a profundidade real de histórico da Riot (~1000 partidas por fila), mesmo em trechos com poucas partidas de Arena por página
   const RIOT_SYNC_OVERLAP_SECONDS = 2 * 24 * 60 * 60; // reconfere os últimos 2 dias por segurança, mesmo em sync incremental
-  const RIOT_SYNC_SCHEMA_VERSION = 3; // suba este número sempre que a lógica de busca mudar de forma relevante —
+  const RIOT_SYNC_SCHEMA_VERSION = 4; // suba este número sempre que a lógica de busca mudar de forma relevante —
                                         // isso invalida checkpoints antigos automaticamente, evitando sincronizações
                                         // incrementais "presas" numa versão anterior com bugs já corrigidos
   let riotSyncCancelled = false;
@@ -1494,7 +1494,7 @@
     return found ? found.id : null;
   }
 
-  const REQUIRED_WORKER_VERSION = 3; // deve bater com WORKER_VERSION no riot-sync-worker.js
+  const REQUIRED_WORKER_VERSION = 4; // deve bater com WORKER_VERSION no riot-sync-worker.js
 
   async function riotSyncStart(){
     if(riotSyncRunning) return;
@@ -1570,7 +1570,7 @@
         });
 
         cursors = data.cursors || cursors;
-        if(!data.hasMore || !data.matchesInBatch){ break; }
+        if(!data.hasMore){ break; }
       }
 
       if(!riotSyncCancelled){
